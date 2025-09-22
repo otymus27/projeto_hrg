@@ -9,7 +9,7 @@ import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { Role } from '../models/role';
 import { Paginacao } from '../models/paginacao';
-import { environment } from '../../environment/environment.prod';
+import { environment } from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root', // Torna o serviço disponível em toda a aplicação
@@ -19,9 +19,9 @@ export class RoleService {
   http = inject(HttpClient);
 
   // ✅ URL base da API para roles.
-  //    Assumindo que o backend tem um endpoint como /api/roles que retorna List<String>  
+  //    Assumindo que o backend tem um endpoint como /api/roles que retorna List<String>
   // URL base da API (poderia ser movida para environment.ts)
-  private readonly API_URL = environment.apiUrl+'/api/role';
+  private readonly API_URL = environment.apiUrl + '/role';
 
   constructor() {}
 

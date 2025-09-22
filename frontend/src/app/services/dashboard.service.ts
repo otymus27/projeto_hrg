@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { environment } from '../../environment/environment.prod';
+import { environment } from '../../environments/environment';
 
 // Opcional: interface para tipar os dados que virão do backend
 export interface DashboardMetrics {
@@ -16,8 +16,8 @@ export interface DashboardMetrics {
 })
 export class DashboardService {
   private http = inject(HttpClient);
-  // ✅ Ajuste para a URL real do seu backend 
-  private readonly API_URL = environment.apiUrl+'/api/dashboard/metrics';
+  // ✅ Ajuste para a URL real do seu backend
+  private readonly API_URL = environment.apiUrl + '/estatisticas';
 
   constructor() {}
 

@@ -1,107 +1,124 @@
+// src/app/app.routes.ts
 import { Routes } from '@angular/router';
-import { Login } from './components/layout/login/login';
-import { Principal } from './components/layout/principal/principal';
-import { MarcaComponent } from './components/marca/marca.component';
-
+import { Login } from './components/layout-admin/login/login';
+import { Principal } from './components/layout-admin/principal/principal';
 import { AuthGuard } from './guards/auth.guard';
 import { UsuarioComponent } from './components/usuario/usuario.component';
-import { MarcaComponentRelatorio } from './components/relatorio/marca/relatorio.marca.component';
 import { RedefinicaoSenhaComponent } from './components/redefinicao-senha/redefinicao-senha.component';
 import { HomeComponentPublico } from './components/layout-publico/home/home.component';
-import { ProtocolosComponent } from './components/layout-publico/protocolos/protocolos.component';
-import { HomeComponent } from './components/layout/home/home.component';
-import { PastaComponent } from './components/pasta/pasta.component';
+import { ExplorerComponent } from './features/public/pages/explorer/explorer.component';
+
+// Componentes Admin
+import { AdminExplorerComponent } from './features/admin/pages/admin-explorer/admin-explorer.component';
+import { DashboardComponent } from './features/admin/pages/dashboard/dashboard.component';
+import { AlterarSenhaComponent } from './components/alterar-senha/alterar-senha.component';
+import { ExplorerFormPublicComponent } from './features/public/pages/formularios/explorer-form-public.component';
+import { AdminFormularioComponent } from './features/admin/pages/admin-formulario/admin-formulario.component';
+import { FarmaciaExplorerPublicoComponent } from './features/public/pages/farmacia/farmacia.component';
 
 export const routes: Routes = [
-  // A rota principal para a página inicial
+  // --- Rotas Públicas ---
   { path: '', redirectTo: 'home', pathMatch: 'full' },
   { path: 'home', component: HomeComponentPublico },
-  // Rota para a lista de pastas de nível superior
-  { path: 'protocolos', component: ProtocolosComponent },
-  { path: 'protocolos/:caminho', component: ProtocolosComponent },
 
-  // Rota para navegação dentro das pastas (com ID)
-  //{ path: 'protocolos/:id', component: ProtocolosComponent },
+  // Explorer de Protocolos Públicos
+  { path: 'publico', component: ExplorerComponent },
 
-  // Rota para a área de gerenciamento autenticada
-  // { path: 'gerenciar-arquivos', component: FileManagementComponent }
+  // Explorer de Formulários Públicos
+  { path: 'formularios-publicos', component: ExplorerFormPublicComponent },
 
-  // // Redireciona a rota base para a página de login
-  { path: '', redirectTo: 'login', pathMatch: 'full' },
+  // 🚨 Farmácia Pública
+  { path: 'farmacias', component: FarmaciaExplorerPublicoComponent },
 
-  // Rota para o componente de login
   { path: 'login', component: Login },
+  { path: 'redefinir-senha', component: RedefinicaoSenhaComponent },
 
-  // // ✅ Nova rota de nível superior para o usuário redefinir a senha
-  // { path: 'redefinir-senha', component: RedefinicaoSenhaComponent },
-
-  // Rota para o painel de administração (com sidebar, header, etc.)
+  // --- Rotas Administrativas (Protegidas) ---
   {
     path: 'admin',
     component: Principal,
-    canActivate: [AuthGuard], // <-- Adicione esta linha
+    canActivate: [AuthGuard],
     children: [
-      // Rota padrão para o componente 'Início'
-      { path: '', redirectTo: 'home', pathMatch: 'full' },
+      // Dashboard é a página inicial da área admin
+      { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
       {
-        path: 'home',
-        component: HomeComponent,
-        data: { roles: ['ADMIN', 'BASIC', 'GERENTE'] }, // ✅ Todos os perfis podem acessar
+        path: 'dashboard',
+        component: DashboardComponent,
+        // acessível para qualquer usuário logado
       },
 
-      // Rotas com submenus para Marcas
-      {
-        path: 'marcas',
-        children: [
-          {
-            path: 'consulta',
-            component: MarcaComponentRelatorio,
-            data: { roles: ['ADMIN', 'GERENTE'] }, // ✅ Só admin pode acessar
-          },
-          {
-            path: 'gerenciar',
-            component: MarcaComponent,
-            data: { roles: ['ADMIN'] }, // ✅ Só admin pode acessar
-          },
-        ],
-      },
-
-      // Rotas com submenus para Marcas
+      // Pastas (restrito ao ADMIN)
       {
         path: 'pastas',
         children: [
           {
-            path: 'consulta',
-            component: PastaComponent,
-            data: { roles: ['ADMIN', 'GERENTE'] }, // ✅ Só admin pode acessar
+            path: '',
+            component: AdminExplorerComponent,
+            data: { roles: ['ADMIN'] },
           },
           {
             path: 'gerenciar',
-            component: PastaComponent,
-            data: { roles: ['ADMIN'] }, // ✅ Só admin pode acessar
+            component: AdminExplorerComponent,
+            data: { roles: ['ADMIN'] },
           },
         ],
       },
 
-      // Rotas com submenus para Marcas
+      // Farmácia (restrito ao ADMIN), aqui é somente atalho para pasta dentro da pasta FARMACIA dentro de pastas de protocolos
+      {
+        path: 'farmacia',
+        component: AdminExplorerComponent,
+        data: { roles: ['ADMIN'], pastaId: 1 },
+      },
+
+      // Formulários (restrito ao ADMIN)
+      {
+        path: 'formularios',
+        children: [
+          {
+            path: '',
+            component: AdminFormularioComponent,
+            data: { roles: ['ADMIN'] },
+          },
+          {
+            path: 'gerenciar',
+            component: AdminFormularioComponent,
+            data: { roles: ['ADMIN'] },
+          },
+        ],
+      },
+
+      // Usuários (restrito ao ADMIN)
       {
         path: 'usuarios',
         children: [
           {
             path: '',
             component: UsuarioComponent,
-            data: { roles: ['ADMIN'] }, // ✅ Só admin pode acessar
+            data: { roles: ['ADMIN'] },
           },
           {
             path: 'gerenciar',
             component: UsuarioComponent,
-            data: { roles: ['ADMIN'] }, // ✅ Só admin pode acessar
+            data: { roles: ['ADMIN'] },
+          },
+        ],
+      },
+
+      // Rota para usuario logado redefinir sua propria senha
+      {
+        path: 'perfil',
+        children: [
+          {
+            path: 'alterar-senha',
+            component: AlterarSenhaComponent,
+            data: { roles: ['ADMIN', 'GERENTE', 'BASIC'] }, // todos os logados podem alterar
           },
         ],
       },
     ],
   },
 
-  // Rota wildcard para redirecionar URLs inválidas para a página de login
+  // Rotas inválidas → login
   { path: '**', redirectTo: 'login' },
 ];

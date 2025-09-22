@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject, TemplateRef, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MdbFormsModule } from 'mdb-angular-ui-kit/forms';
+
 import {
   MdbModalModule,
   MdbModalRef,
@@ -12,7 +13,7 @@ import { Paginacao } from '../../models/paginacao'; // Modelo de Paginação
 import { RoleService } from '../../services/role.service';
 // ✅ Novos imports para o gerenciamento de usuários
 import { Usuario } from '../../models/usuario';
-import { UsuarioService } from '../../services/usuario.service';
+import { ErrorMessage, UsuarioService } from '../../services/usuario.service';
 import { Role } from '../../models/role';
 import { RecuperarSenhaService } from '../../services/recuperar-senha.service';
 import { ModalConfirmacaoComponent } from '../modal/confirmacao/confirmacao.component';
@@ -42,6 +43,7 @@ export class UsuarioComponent {
 
   // Filtro
   filtroUsername: string = ''; // ✅ Novo filtro por username
+  filtroNome: string = ''; // Filtro para nome
 
   // Ordenação
   colunaOrdenada: keyof Usuario = 'username'; // ✅ Campo padrão para ordenação
@@ -75,7 +77,8 @@ export class UsuarioComponent {
         this.size,
         this.colunaOrdenada,
         this.ordem,
-        this.filtroUsername
+        this.filtroUsername,
+        this.filtroNome
       )
       .subscribe({
         next: (resposta: Paginacao<Usuario>) => {
@@ -113,11 +116,13 @@ export class UsuarioComponent {
     this.page = 0; // Sempre volta para a primeira página ao aplicar o filtro
     this.listar();
     this.filtroUsername = ''; // Limpa campo de busca
+    this.filtroNome = '';
   }
 
   // ✅ Método para limpar filtros
   limparFiltros() {
     this.filtroUsername = '';
+    this.filtroNome = '';
     this.aplicarFiltros();
   }
 
@@ -147,6 +152,7 @@ export class UsuarioComponent {
     this.registroSelecionado = {
       id: 0,
       username: '',
+      nome: '',
       password: '',
       roles: [], // Inicializa com um array vazio de objetos Role
     };
@@ -175,6 +181,7 @@ export class UsuarioComponent {
     this.registroSelecionado = {
       id: usuario.id,
       username: usuario.username,
+      nome: usuario.nome,
       roles: rolesSelecionados, // Atribui as roles completas
       password: '', // ✅ Importante: Limpar a senha ao editar para não enviar vazia acidentalmente
     };
@@ -227,9 +234,15 @@ export class UsuarioComponent {
       return;
     }
 
+    if (!usuario.nome?.trim()) {
+      this.toastService.showError('Preencha todos os campos obrigatórios.');
+      return;
+    }
+
     const isNovoRegistro = !usuario.id || usuario.id <= 0;
     const usuarioDTO: Partial<Usuario> = {
       username: usuario.username,
+      nome: usuario.nome,
       password: usuario.password,
       roles: usuario.roles,
     };
@@ -243,7 +256,7 @@ export class UsuarioComponent {
         return;
       }
       this.usuarioService.cadastrar(usuarioDTO).subscribe({
-        next: () => {
+        next: (resposta) => {
           // ✅ Debug para retorno do backend
           console.log('Retorno do backend:', usuarioDTO);
           // ✅ Log de debug para o objeto enviado no cadastro
@@ -254,14 +267,15 @@ export class UsuarioComponent {
             isNovoRegistro
           );
 
-          this.toastService.showSuccess('Usuário cadastrado com sucesso!');
+          const mensagem =
+            resposta?.message || 'Usuário cadastrado com sucesso!';
+          this.toastService.showSuccess(mensagem);
           this.listar();
           this.modalRef.close();
         },
-        error: (err) => {
-          // ✅ Use o serviço de toast
+        error: (err: ErrorMessage) => {
           this.toastService.showError(
-            `Erro: ${err.error?.mensagem || 'Erro desconhecido.'}`
+            `Erro (${err.status} - ${err.error}): ${err.message}`
           );
         },
       });
@@ -269,6 +283,7 @@ export class UsuarioComponent {
       // ✅ Para atualização: Começamos com um objeto parcial que NÃO tem a senha por padrão
       const isAtualizarRegistro: Partial<Usuario> = {
         username: usuario.username,
+        nome: usuario.nome,
         roles: this.rolesDisponiveis as Role[], // Envia roles como objetos Role
       };
 
@@ -296,11 +311,9 @@ export class UsuarioComponent {
           this.listar();
           this.modalRef.close();
         },
-        error: (err) => {
+        error: (err: ErrorMessage) => {
           this.toastService.showError(
-            `Erro: ${
-              err.error?.mensagem || 'Erro desconhecido ao atualizar usuário.'
-            }`
+            `Erro (${err.status} - ${err.error}): ${err.message}`
           );
         },
       });
@@ -320,8 +333,10 @@ export class UsuarioComponent {
         this.toastService.showSuccess('Usuário excluído com sucesso!');
         this.listar();
       },
-      error: () => {
-        this.toastService.showError('Erro ao excluir usuário!');
+      error: (err: ErrorMessage) => {
+        this.toastService.showError(
+          `Erro (${err.status} - ${err.error}): ${err.message}`
+        );
       },
     });
   }

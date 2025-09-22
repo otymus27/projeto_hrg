@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http'; // Importe o HttpClient
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map, tap } from 'rxjs/operators';
 import { Router } from '@angular/router';
-import { environment } from '../../environment/environment.prod';
+import { environment } from '../../environments/environment';
 
 interface AuthResponse {
   accessToken: string;
@@ -27,6 +27,7 @@ export class AuthService {
   private readonly TOKEN_KEY = 'auth_token';
   private readonly USERNAME_KEY = 'logged_username';
   private readonly ROLES_KEY = 'logged_roles';
+  private readonly FULLNAME_KEY = 'logged_fullname';
 
   // ✅ BehaviorSubject para emitir o estado de login e informações do usuário
   private _isLoggedIn = new BehaviorSubject<boolean>(this.hasToken());
@@ -42,6 +43,11 @@ export class AuthService {
   );
   loggedInRoles$ = this._loggedInRoles.asObservable();
 
+  private _loggedInFullName = new BehaviorSubject<string | null>(
+    localStorage.getItem(this.FULLNAME_KEY)
+  );
+  loggedInFullName$ = this._loggedInFullName.asObservable(); // ✅ observable para o header
+
   // Injetando o HttpClient no construtor
   constructor() {}
 
@@ -55,6 +61,7 @@ export class AuthService {
     localStorage.setItem(this.TOKEN_KEY, token);
     this.extractUserInfoFromToken(token); // ✅ Extrai e armazena info do usuário
     this._isLoggedIn.next(true);
+    this.carregarUsuarioLogado()
     console.log('Token salvo:', token);
   }
 
@@ -93,50 +100,103 @@ export class AuthService {
     return this._loggedInRoles.getValue();
   }
 
+  // ✅ NOVO: Retorna o nome completo do usuário logado
+  getLoggedInFullName(): string | null {
+    return this._loggedInFullName.getValue();
+  }
+
+  // ✅ Retorna apenas o primeiro nome
+  getLoggedInFirstName(): string | null {
+    const fullName = this._loggedInFullName.getValue();
+    if (!fullName) return null;
+    return fullName.split(' ')[0]; // pega só o primeiro nome
+  }
+
+  // ✅ Retorna a role principal (primeira da lista)
+  getLoggedInMainRole(): string | null {
+    const roles = this._loggedInRoles.getValue();
+    return roles.length > 0 ? roles[0] : null;
+  }
+
+
+  // ✅ Chama o endpoint /usuario/logado
+  private carregarUsuarioLogado(): void {
+    this.http.get<any>(`${this.API_URL}/usuario/logado`).subscribe({
+      next: (usuario) => {
+        console.log('📌 Usuário logado recebido do backend:', usuario);
+
+        const roles = (usuario.roles || []).map((r: any) =>
+          typeof r === 'string' ? r : r.nome
+        );
+
+        localStorage.setItem(this.USERNAME_KEY, usuario.username);
+        localStorage.setItem(this.ROLES_KEY, JSON.stringify(roles));
+        localStorage.setItem(this.FULLNAME_KEY, usuario.nomeCompleto);
+
+        this._loggedInUsername.next(usuario.username);
+        this._loggedInRoles.next(roles);
+        this._loggedInFullName.next(usuario.nomeCompleto);
+
+        console.log('✅ Nome completo salvo:', usuario.nomeCompleto);
+        console.log('✅ Roles salvas:', roles);
+      },
+      error: (err) => {
+        console.error('Erro ao buscar usuário logado:', err);
+        this.clearSession();
+      },
+    });
+  }
+
+
   private clearSession(): void {
     localStorage.removeItem(this.TOKEN_KEY);
     localStorage.removeItem(this.USERNAME_KEY); // ✅ Remove info do usuário
     localStorage.removeItem(this.ROLES_KEY); // ✅ Remove info do usuário
+    localStorage.removeItem(this.FULLNAME_KEY); // ✅ Remove info do usuário
+
     this._isLoggedIn.next(false);
     this._loggedInUsername.next(null);
     this._loggedInRoles.next([]);
+    this._loggedInFullName.next(null);
   }
 
   // Envia as credenciais de login para o backend
   login(credenciais: any): Observable<any> {
-    return this.http.post<AuthResponse>(`${this.API_URL}/login`, credenciais).pipe(
-      tap((response: AuthResponse) => {
-        // ✅ Apenas chama setToken() e deixa a lógica de extração lá
-        if (response.accessToken) {
-          this.setToken(response.accessToken);
-        }
+    return this.http
+      .post<AuthResponse>(`${this.API_URL}/login`, credenciais)
+      .pipe(
+        tap((response: AuthResponse) => {
+          // ✅ Apenas chama setToken() e deixa a lógica de extração lá
+          if (response.accessToken) {
+            this.setToken(response.accessToken);
+          }
 
-        // ✅ Adicione esta linha para depuração
-        console.log('Resposta completa do backend:', response);
-        console.log('Valor de senhaProvisoria:', response.senhaProvisoria);
-        // ✅ Adicione esta verificação
-        if (response.senhaProvisoria) {
-          console.log(
-            'Detectado senha provisória. Tentando navegar para /redefinir-senha...'
-          );
-          setTimeout(() => {
-            this.router.navigateByUrl('/redefinir-senha').then((success) => {
-              if (success) {
-                console.log('Navegação para redefinir-senha bem-sucedida!');
-              } else {
-                console.error('Falha na navegação para redefinir-senha.');
-              }
-            });
-          }, 100);
-        } else {
-          console.log(
-            'Login bem-sucedido. Redirecionando para a área principal.'
-          );
-          this.router.navigate(['/admin/home']);
-        }
-      }),
-      map(() => true)
-    );
+          // ✅ Adicione esta linha para depuração
+          console.log('Resposta completa do backend:', response);
+          console.log('Valor de senhaProvisoria:', response.senhaProvisoria);
+          // ✅ Adicione esta verificação
+          if (response.senhaProvisoria) {
+            console.log(
+              'Detectado senha provisória. Tentando navegar para /redefinir-senha...'
+            );
+            setTimeout(() => {
+              this.router.navigateByUrl('/redefinir-senha').then((success) => {
+                if (success) {
+                  console.log('Navegação para redefinir-senha bem-sucedida!');
+                } else {
+                  console.error('Falha na navegação para redefinir-senha.');
+                }
+              });
+            }, 100);
+          } else {
+            console.log(
+              'Login bem-sucedido. Redirecionando para a área principal.'
+            );
+            this.router.navigate(['/admin/dashboard']);
+          }
+        }),
+        map(() => true)
+      );
   }
 
   // Limpa o token e todas as informações do usuário do localStorage e redireciona para o login

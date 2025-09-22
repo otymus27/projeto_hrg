@@ -3,14 +3,29 @@ package br.com.carro.entities.DTO;
 import br.com.carro.entities.Arquivo;
 import java.time.LocalDateTime;
 
-// Para listagem de arquivos na área pública ou administrativa
 public record ArquivoDTO(
         Long id,
         String nome,
         String tipo,
         Long tamanho,
         LocalDateTime dataUpload,
-        LocalDateTime dataAlteracao,
-        String caminho,      // caminho relativo para exibição/download
-        Long pastaId         // id da pasta a que pertence
-) {}
+        LocalDateTime dataAtualizacao,
+        String criadoPor                  // ✅ Nome do criador ou valor padrão
+) {
+    public static ArquivoDTO fromEntity(Arquivo arquivo) {
+        // ✅ Evita NullPointerException caso criadoPor seja nulo
+        String criadorNome = (arquivo.getCriadoPor() != null && arquivo.getCriadoPor().getUsername() != null)
+                ? arquivo.getCriadoPor().getUsername()
+                : "Sistema";
+
+        return new ArquivoDTO(
+                arquivo.getId(),
+                arquivo.getNomeArquivo(),
+                arquivo.getTipoMime(),
+                arquivo.getTamanho(),
+                arquivo.getDataUpload(),
+                arquivo.getDataAtualizacao(),
+                criadorNome
+        );
+    }
+}

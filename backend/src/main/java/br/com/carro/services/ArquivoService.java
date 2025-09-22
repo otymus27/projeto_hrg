@@ -1,359 +1,463 @@
 package br.com.carro.services;
 
 import br.com.carro.entities.Arquivo;
-import br.com.carro.entities.DTO.ArquivoDTO;
-import br.com.carro.entities.DTO.ArquivoUpdateDTO;
 import br.com.carro.entities.Pasta;
 import br.com.carro.entities.Usuario.Usuario;
+import br.com.carro.entities.DTO.ArquivoDTO;
 import br.com.carro.repositories.ArquivoRepository;
 import br.com.carro.repositories.PastaRepository;
+import br.com.carro.utils.ArquivoUtils;
+import br.com.carro.utils.FileUtils;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.MalformedURLException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
 public class ArquivoService {
 
-    private final ArquivoRepository arquivoRepository;
-    private final PastaRepository pastaRepository;
-
-    @Value("${app.file.upload-dir}")
-    private String fileStorageLocation;
-
     @Autowired
-    public ArquivoService(ArquivoRepository arquivoRepository, PastaRepository pastaRepository) {
-        this.arquivoRepository = arquivoRepository;
+    private ArquivoRepository arquivoRepository;
+    private PastaRepository pastaRepository;
+    private ArquivoUtils fileUtils;
+
+    public ArquivoService(PastaRepository pastaRepository, ArquivoUtils fileUtils, ArquivoRepository arquivoRepository) {
         this.pastaRepository = pastaRepository;
+        this.fileUtils = fileUtils;
+        this.arquivoRepository = arquivoRepository;
     }
 
+    // RF-016: Upload de arquivo
+    public Arquivo uploadArquivo(
+            MultipartFile file,
+            Long pastaId,
+            Usuario usuarioLogado,
+            PastaRepository pastaRepository,
+            ArquivoRepository arquivoRepository
+    ) throws AccessDeniedException {
 
-    /**
-     * Faz o upload de um único arquivo para uma pasta específica.
-     * @param file O arquivo a ser enviado.
-     * @param pastaId O ID da pasta de destino.
-     * @param usuario O usuário que está fazendo o upload.
-     * @return O objeto Arquivo salvo no banco de dados.
-     * @throws IOException
-     * @throws EntityNotFoundException
-     */
-    @Transactional
-    public ArquivoDTO uploadArquivo(MultipartFile file, Long pastaId, Usuario usuario) throws IOException {
-        String fileName = StringUtils.cleanPath(Objects.requireNonNull(file.getOriginalFilename()));
-        Pasta pasta = pastaRepository.findById(pastaId)
-                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com o ID: " + pastaId));
-
-        Path targetLocation = Paths.get(pasta.getCaminhoCompleto()).resolve(fileName);
-
-        Files.createDirectories(targetLocation.getParent());
-
-        try (InputStream inputStream = file.getInputStream()) {
-            Files.copy(inputStream, targetLocation, StandardCopyOption.REPLACE_EXISTING);
+        if (usuarioLogado == null) {
+            throw new SecurityException("Usuário não autenticado.");
         }
 
-        Arquivo arquivo = new Arquivo();
-        arquivo.setNomeArquivo(fileName);
-        arquivo.setCaminhoArmazenamento(targetLocation.toAbsolutePath().normalize().toString());
-        arquivo.setTamanhoBytes(file.getSize());
-        arquivo.setDataUpload(LocalDateTime.now());
-        arquivo.setPasta(pasta);
-        arquivo.setCriadoPor(usuario);
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Arquivo enviado está vazio.");
+        }
 
-        Arquivo arquivoSalvo = arquivoRepository.save(arquivo);
-        return ArquivoDTO.fromEntity(arquivoSalvo);
-    }
-
-    /**
-     * Faz o upload de múltiplos arquivos para uma pasta específica.
-     * @param files A lista de arquivos a serem enviados.
-     * @param pastaId O ID da pasta de destino.
-     * @param usuario O usuário que está fazendo o upload.
-     * @return Uma lista de DTOs dos arquivos salvos no banco de dados.
-     * @throws IOException
-     * @throws EntityNotFoundException
-     */
-    @Transactional
-    public List<ArquivoDTO> uploadMultiplosArquivos(List<MultipartFile> files, Long pastaId, Usuario usuario) throws IOException {
-        return files.stream()
-                .map(file -> {
-                    try {
-                        return uploadArquivo(file, pastaId, usuario);
-                    } catch (IOException e) {
-                        throw new RuntimeException("Falha ao fazer upload do arquivo: " + file.getOriginalFilename(), e);
-                    }
-                })
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Busca um arquivo por ID.
-     * Retorna um Optional que pode conter o arquivo, ou ser vazio se não for encontrado.
-     * @param id O ID do arquivo a ser buscado.
-     * @return um Optional contendo o arquivo encontrado ou um Optional.empty().
-     */
-    public Optional<Arquivo> buscarArquivoPorId(Long id) {
-        return arquivoRepository.findById(id);
-    }
-
-    /**
-     * Lista todos os arquivos dentro de uma pasta específica.
-     * @param pastaId O ID da pasta.
-     * @return Uma lista de DTOs dos arquivos.
-     * @throws EntityNotFoundException
-     */
-    public List<ArquivoDTO> listarArquivosPorPasta(Long pastaId) {
+        // 1. Buscar pasta de destino
         Pasta pasta = pastaRepository.findById(pastaId)
-                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com o ID: " + pastaId));
-        return pasta.getArquivos().stream()
+                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com ID: " + pastaId));
+
+        // 2. Verificar permissões
+        boolean temPermissao = usuarioLogado.getRoles().stream()
+                .anyMatch(r -> r.getNome().equals("ADMIN") || r.getNome().equals("GERENTE"));
+
+        if (!temPermissao) {
+            throw new AccessDeniedException("Usuário não tem permissão para enviar arquivos nesta pasta.");
+        }
+
+        // 3. Sanitizar nome do arquivo
+        String nomeArquivo = FileUtils.sanitizeFileName(file.getOriginalFilename());
+        Path destino = Paths.get(pasta.getCaminhoCompleto(), nomeArquivo);
+
+        try {
+            // 4. Criar diretório se não existir
+            Files.createDirectories(destino.getParent());
+
+            // 5. Salvar arquivo no filesystem
+            Files.copy(file.getInputStream(), destino, StandardCopyOption.REPLACE_EXISTING);
+
+        } catch (IOException e) {
+            throw new RuntimeException("Erro ao salvar o arquivo no sistema de arquivos: " + nomeArquivo, e);
+        }
+
+        // 6. Criar registro no banco
+        Arquivo arquivo = new Arquivo();
+        arquivo.setNomeArquivo(nomeArquivo);
+        arquivo.setCaminhoArmazenamento(destino.toString());
+        arquivo.setTipoMime(file.getContentType());
+        arquivo.setTamanho(file.getSize());
+        arquivo.setDataUpload(LocalDateTime.now());
+        arquivo.setDataAtualizacao(LocalDateTime.now());
+        arquivo.setPasta(pasta);
+        arquivo.setCriadoPor(usuarioLogado);
+
+        return arquivoRepository.save(arquivo);
+    }
+
+
+    // RF-017: Renomear arquivo
+    public ArquivoDTO renomearArquivo(Long arquivoId, String novoNome, Usuario usuarioLogado) throws IOException {
+        if (novoNome == null || novoNome.trim().isEmpty()) {
+            throw new IllegalArgumentException("O novo nome do arquivo não pode ser vazio.");
+        }
+
+        Arquivo arquivo = arquivoRepository.findById(arquivoId)
+                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com ID: " + arquivoId));
+
+        if (!arquivo.getPasta().getUsuariosComPermissao().contains(usuarioLogado)) {
+            throw new AccessDeniedException("Usuário não possui permissão para renomear este arquivo.");
+        }
+
+        Path novoCaminho = fileUtils.renomearArquivo(arquivo.getCaminhoArmazenamento(), novoNome);
+        arquivo.setNomeArquivo(novoNome);
+        arquivo.setCaminhoArmazenamento(novoCaminho.toString());
+        arquivo.setDataAtualizacao(LocalDateTime.now());
+
+        arquivo = arquivoRepository.save(arquivo);
+        return ArquivoDTO.fromEntity(arquivo);
+    }
+
+    public void excluirArquivo(Long arquivoId, Usuario usuarioLogado) throws IOException {
+        Arquivo arquivo = arquivoRepository.findById(arquivoId)
+                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com ID: " + arquivoId));
+
+        if (!arquivo.getPasta().getUsuariosComPermissao().contains(usuarioLogado)) {
+            throw new AccessDeniedException("Usuário não possui permissão para excluir este arquivo.");
+        }
+
+        fileUtils.deleteFile(arquivo.getCaminhoArmazenamento());
+        arquivoRepository.delete(arquivo);
+    }
+
+    public ArquivoDTO moverArquivo(Long arquivoId, Long pastaDestinoId, Usuario usuarioLogado) throws IOException {
+        Arquivo arquivo = arquivoRepository.findById(arquivoId)
+                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com ID: " + arquivoId));
+
+        Pasta pastaDestino = pastaRepository.findById(pastaDestinoId)
+                .orElseThrow(() -> new EntityNotFoundException("Pasta destino não encontrada com ID: " + pastaDestinoId));
+
+        if (!arquivo.getPasta().getUsuariosComPermissao().contains(usuarioLogado)
+                || !pastaDestino.getUsuariosComPermissao().contains(usuarioLogado)) {
+            throw new AccessDeniedException("Usuário não possui permissão para mover este arquivo.");
+        }
+
+        Path novoCaminho = fileUtils.moverArquivo(arquivo.getCaminhoArmazenamento(), pastaDestino.getCaminhoCompleto());
+        arquivo.setCaminhoArmazenamento(novoCaminho.toString());
+        arquivo.setPasta(pastaDestino);
+        arquivo.setDataAtualizacao(LocalDateTime.now());
+
+        arquivo = arquivoRepository.save(arquivo);
+        return ArquivoDTO.fromEntity(arquivo);
+    }
+
+    public ArquivoDTO copiarArquivo(Long arquivoId, Long pastaDestinoId, Usuario usuarioLogado) throws IOException {
+        Arquivo arquivo = arquivoRepository.findById(arquivoId)
+                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com ID: " + arquivoId));
+
+        Pasta pastaDestino = pastaRepository.findById(pastaDestinoId)
+                .orElseThrow(() -> new EntityNotFoundException("Pasta destino não encontrada com ID: " + pastaDestinoId));
+
+        if (!arquivo.getPasta().getUsuariosComPermissao().contains(usuarioLogado)
+                || !pastaDestino.getUsuariosComPermissao().contains(usuarioLogado)) {
+            throw new AccessDeniedException("Usuário não possui permissão para copiar este arquivo.");
+        }
+
+        Path destino = fileUtils.copiarArquivo(arquivo.getCaminhoArmazenamento(), pastaDestino.getCaminhoCompleto());
+
+        Arquivo copia = new Arquivo();
+        copia.setNomeArquivo(arquivo.getNomeArquivo());
+        copia.setCaminhoArmazenamento(destino.toString());
+        copia.setTipoMime(arquivo.getTipoMime());
+        copia.setTamanho(arquivo.getTamanho());
+        copia.setDataUpload(LocalDateTime.now());
+        copia.setDataAtualizacao(LocalDateTime.now());
+        copia.setCriadoPor(usuarioLogado);
+        copia.setPasta(pastaDestino);
+
+        copia = arquivoRepository.save(copia);
+        return ArquivoDTO.fromEntity(copia);
+    }
+
+    @Transactional
+    public ArquivoDTO substituirArquivo(Long arquivoId, MultipartFile novoArquivo, Usuario usuarioLogado) throws IOException {
+        if (novoArquivo == null || novoArquivo.isEmpty()) {
+            throw new IllegalArgumentException("Arquivo enviado está vazio.");
+        }
+
+        Arquivo arquivoExistente = arquivoRepository.findById(arquivoId)
+                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com o ID: " + arquivoId));
+
+        if (!arquivoExistente.getPasta().getUsuariosComPermissao().contains(usuarioLogado)) {
+            throw new AccessDeniedException("Usuário não tem permissão para substituir este arquivo.");
+        }
+
+        Path caminhoArquivoAntigo = Paths.get(arquivoExistente.getCaminhoArmazenamento());
+        Path diretorioDestino = caminhoArquivoAntigo.getParent();
+        String novoNomeArquivo = novoArquivo.getOriginalFilename();
+        Path caminhoNovoArquivo = diretorioDestino.resolve(novoNomeArquivo);
+
+        try (InputStream inputStream = novoArquivo.getInputStream()) {
+            Files.copy(inputStream, caminhoNovoArquivo, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            throw new IOException("Erro ao salvar o novo arquivo: " + e.getMessage(), e);
+        }
+
+        if (!caminhoArquivoAntigo.equals(caminhoNovoArquivo) && Files.exists(caminhoArquivoAntigo)) {
+            try {
+                Files.delete(caminhoArquivoAntigo);
+            } catch (IOException e) {
+                System.err.println("Aviso: Não foi possível remover o arquivo antigo: " + caminhoArquivoAntigo);
+            }
+        }
+
+        arquivoExistente.setNomeArquivo(novoNomeArquivo);
+        arquivoExistente.setCaminhoArmazenamento(caminhoNovoArquivo.toString());
+        arquivoExistente.setTamanho(novoArquivo.getSize());
+        arquivoExistente.setTipoMime(novoArquivo.getContentType());
+        arquivoExistente.setDataAtualizacao(LocalDateTime.now());
+
+        Arquivo arquivoAtualizado = arquivoRepository.save(arquivoExistente);
+        return ArquivoDTO.fromEntity(arquivoAtualizado);
+    }
+
+
+    @Transactional
+    public List<ArquivoDTO> excluirArquivosDaPasta(Long pastaId, List<Long> arquivoIds, Usuario usuarioLogado) throws IOException {
+        // 1️⃣ Buscar a pasta
+        Pasta pasta = pastaRepository.findById(pastaId)
+                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com ID: " + pastaId));
+
+        // 2️⃣ Verificar permissão
+        if (!pasta.getUsuariosComPermissao().contains(usuarioLogado)) {
+            throw new AccessDeniedException("Usuário não possui permissão para excluir arquivos desta pasta.");
+        }
+
+        // 3️⃣ Buscar arquivos para exclusão
+        List<Arquivo> arquivosParaExcluir;
+        if (arquivoIds == null || arquivoIds.isEmpty()) {
+            arquivosParaExcluir = arquivoRepository.findByPastaId(pasta.getId());
+        } else {
+            arquivosParaExcluir = arquivoRepository.findAllById(arquivoIds)
+                    .stream()
+                    .filter(a -> a.getPasta().getId().equals(pastaId))
+                    .collect(Collectors.toList());
+        }
+
+        // 4️⃣ Apagar arquivos do disco
+        List<ArquivoDTO> arquivosExcluidos = new ArrayList<>();
+        for (Arquivo arquivo : arquivosParaExcluir) {
+            Path caminho = Path.of(arquivo.getCaminhoArmazenamento());
+            if (Files.exists(caminho)) {
+                Files.delete(caminho);
+            }
+            arquivosExcluidos.add(ArquivoDTO.fromEntity(arquivo));
+        }
+
+        // 5️⃣ Deletar registros do banco
+        arquivoRepository.deleteAll(arquivosParaExcluir);
+
+        return arquivosExcluidos;
+    }
+
+    @Transactional
+    public List<ArquivoDTO> uploadArquivos(Long pastaId, List<MultipartFile> arquivos, Usuario usuarioLogado) throws IOException {
+        if (arquivos == null || arquivos.isEmpty()) {
+            throw new IllegalArgumentException("Nenhum arquivo foi enviado para upload.");
+        }
+
+        // 1️⃣ Buscar a pasta
+        Pasta pasta = pastaRepository.findById(pastaId)
+                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com ID: " + pastaId));
+
+        // 2️⃣ Verificar permissão
+        if (!pasta.getUsuariosComPermissao().contains(usuarioLogado)) {
+            throw new AccessDeniedException("Usuário não possui permissão para enviar arquivos para esta pasta.");
+        }
+
+        List<ArquivoDTO> arquivosSalvos = new ArrayList<>();
+
+        for (MultipartFile file : arquivos) {
+            if (file.isEmpty()) continue;
+
+            // 3️⃣ Salvar fisicamente
+            Path destino = fileUtils.salvarArquivo(file, pasta.getCaminhoCompleto());
+
+            // 4️⃣ Criar entidade Arquivo
+            Arquivo novoArquivo = new Arquivo();
+            novoArquivo.setNomeArquivo(file.getOriginalFilename());
+            novoArquivo.setCaminhoArmazenamento(destino.toString());
+            novoArquivo.setTipoMime(file.getContentType());
+            novoArquivo.setTamanho(file.getSize());
+            novoArquivo.setPasta(pasta);
+            novoArquivo.setCriadoPor(usuarioLogado);
+            novoArquivo.setDataUpload(LocalDateTime.now());
+            novoArquivo.setDataAtualizacao(LocalDateTime.now());
+
+            // 5️⃣ Salvar no banco
+            novoArquivo = arquivoRepository.save(novoArquivo);
+
+            arquivosSalvos.add(ArquivoDTO.fromEntity(novoArquivo));
+        }
+
+        return arquivosSalvos;
+    }
+
+    public List<ArquivoDTO> listarArquivos(Pasta pasta, String extensaoFiltro, String ordenarPor, boolean asc) {
+        if (pasta == null) {
+            throw new IllegalArgumentException("Pasta não pode ser nula.");
+        }
+
+        List<Arquivo> arquivos = (List<Arquivo>) pasta.getArquivos();
+
+        return arquivos.stream()
+                .filter(a -> extensaoFiltro == null || a.getNomeArquivo().toLowerCase().endsWith(extensaoFiltro.toLowerCase()))
+                .sorted(getComparator(ordenarPor, asc))
                 .map(ArquivoDTO::fromEntity)
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Baixa um arquivo com base no seu ID (para acesso privado/autenticado).
-     * @param id O ID do arquivo.
-     * @return O recurso de arquivo (Resource).
-     * @throws EntityNotFoundException
-     * @throws MalformedURLException
-     */
-    public Resource downloadArquivo(Long id) throws MalformedURLException {
-        Arquivo arquivo = arquivoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com o ID: " + id));
-
-        Path filePath = Paths.get(arquivo.getCaminhoArmazenamento()).normalize();
-        Resource resource = new UrlResource(filePath.toUri());
-
-        if (resource.exists() && resource.isReadable()) {
-            return resource;
-        } else {
-            throw new RuntimeException("Não foi possível ler o arquivo!");
+    private Comparator<Arquivo> getComparator(String ordenarPor, boolean asc) {
+        Comparator<Arquivo> comparator;
+        switch (ordenarPor.toLowerCase()) {
+            case "tamanho":
+                comparator = Comparator.comparing(Arquivo::getTamanho);
+                break;
+            case "data":
+                comparator = Comparator.comparing(Arquivo::getDataUpload);
+                break;
+            case "nome":
+            default:
+                comparator = Comparator.comparing(Arquivo::getNomeArquivo, String.CASE_INSENSITIVE_ORDER);
         }
+        return asc ? comparator : comparator.reversed();
     }
 
-    /**
-     * Baixa um arquivo com base no seu ID (para acesso público).
-     * @param id O ID do arquivo.
-     * @return O recurso de arquivo (Resource).
-     * @throws EntityNotFoundException
-     * @throws MalformedURLException
-     */
-    public Resource downloadArquivoPublico(Long id) throws MalformedURLException {
-        // A lógica de segurança, se houver, deve ser implementada aqui.
-        // Por exemplo, checar se o arquivo pertence a uma pasta pública.
+    public Arquivo buscarPorId(Long id)  {
+        // Busca o arquivo pelo ID
         Arquivo arquivo = arquivoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com o ID: " + id));
+                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com ID: " + id));
 
-        Path filePath = Paths.get(arquivo.getCaminhoArmazenamento()).normalize();
-        Resource resource = new UrlResource(filePath.toUri());
-
-        if (resource.exists() && resource.isReadable()) {
-            return resource;
-        } else {
-            throw new RuntimeException("Não foi possível ler o arquivo!");
-        }
+        // Retorna o DTO do arquivo
+        return arquivo;
     }
 
-    /**
-     * Exclui um arquivo físico e seu registro no banco de dados.
-     * @param id O ID do arquivo a ser excluído.
-     * @throws IOException
-     * @throws EntityNotFoundException
-     */
-    @Transactional
-    public void excluirArquivo(Long id) throws IOException {
-        Arquivo arquivo = arquivoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com o ID: " + id));
-
-        Path caminhoArquivo = Paths.get(arquivo.getCaminhoArmazenamento());
-        Files.deleteIfExists(caminhoArquivo);
-
-        arquivoRepository.delete(arquivo);
-    }
 
     /**
-     * Exclui múltiplos arquivos por uma lista de IDs.
-     * @param arquivoIds Lista de IDs dos arquivos a serem excluídos.
-     * @throws IOException
+     * Lista arquivos de uma pasta, com filtros opcionais de nome e extensão e ordenação.
+     *
+     * @param pastaId        ID da pasta
+     * @param nomeFiltro     Filtro por nome (opcional)
+     * @param extensaoFiltro Filtro por extensão (opcional)
+     * @param sortField      Campo para ordenar ("nomeArquivo", "dataCriacao", "tamanhoBytes" etc.)
+     * @param sortDirection  "asc" ou "desc"
+     * @param usuarioLogado  Usuário logado para validação de permissão
+     * @return Lista de arquivos filtrada e ordenada
      */
-    @Transactional
-    public void excluirMultiplosArquivos(List<Long> arquivoIds) throws IOException {
-        for (Long id : arquivoIds) {
-            excluirArquivo(id);
-        }
-    }
-
-    /**
-     * Exclui todos os arquivos de uma pasta por ID.
-     * @param pastaId ID da pasta.
-     * @throws IOException
-     */
-    @Transactional
-    public void excluirTodosArquivosNaPasta(Long pastaId) throws IOException {
+    public List<Arquivo> listarArquivosPorPasta(Long pastaId,
+                                                String nomeFiltro,
+                                                String extensaoFiltro,
+                                                String sortField,
+                                                String sortDirection,
+                                                Usuario usuarioLogado) {
+        // Busca a pasta
         Pasta pasta = pastaRepository.findById(pastaId)
-                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com o ID: " + pastaId));
+                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com ID: " + pastaId));
 
-        for (Arquivo arquivo : pasta.getArquivos()) {
-            Path caminhoArquivo = Paths.get(arquivo.getCaminhoArmazenamento());
-            Files.deleteIfExists(caminhoArquivo);
+        // Verifica permissão
+        if (!pasta.getUsuariosComPermissao().contains(usuarioLogado)) {
+            throw new SecurityException("Usuário não possui permissão para acessar esta pasta.");
         }
-        arquivoRepository.deleteAll(pasta.getArquivos());
+
+        // Busca arquivos da pasta
+        List<Arquivo> arquivos = arquivoRepository.findByPasta(pasta);
+
+        // Filtra por nome, se informado
+        if (nomeFiltro != null && !nomeFiltro.isBlank()) {
+            String nomeLower = nomeFiltro.toLowerCase();
+            arquivos = arquivos.stream()
+                    .filter(a -> a.getNomeArquivo() != null && a.getNomeArquivo().toLowerCase().contains(nomeLower))
+                    .collect(Collectors.toList());
+        }
+
+        // Filtra por extensão, se informado
+        if (extensaoFiltro != null && !extensaoFiltro.isBlank()) {
+            String extLower = extensaoFiltro.toLowerCase();
+            arquivos = arquivos.stream()
+                    .filter(a -> {
+                        String nome = a.getNomeArquivo();
+                        if (nome == null || !nome.contains(".")) return false;
+                        String arquivoExt = nome.substring(nome.lastIndexOf(".") + 1).toLowerCase();
+                        return arquivoExt.equals(extLower);
+                    })
+                    .collect(Collectors.toList());
+        }
+
+        // Ordenação
+        Comparator<Arquivo> comparator;
+        switch (sortField) {
+            case "dataCriacao":
+                comparator = Comparator.comparing(Arquivo::getDataUpload);
+                break;
+            case "dataAtualizacao":
+                comparator = Comparator.comparing(Arquivo::getDataAtualizacao);
+                break;
+            case "tamanhoBytes":
+                comparator = Comparator.comparing(Arquivo::getTamanho);
+                break;
+            case "tipoMime":
+                comparator = Comparator.comparing(Arquivo::getTipoMime, Comparator.nullsLast(String::compareToIgnoreCase));
+                break;
+            default: // nomeArquivo
+                comparator = Comparator.comparing(Arquivo::getNomeArquivo, String.CASE_INSENSITIVE_ORDER);
+        }
+
+        if ("desc".equalsIgnoreCase(sortDirection)) {
+            comparator = comparator.reversed();
+        }
+
+        return arquivos.stream()
+                .sorted(comparator)
+                .collect(Collectors.toList());
     }
 
     /**
-     * Atualiza os metadados de um arquivo por ID, incluindo o nome e o caminho físico.
-     * @param id ID do arquivo.
-     * @param dto DTO com os novos metadados.
-     * @return O DTO do arquivo atualizado.
-     * @throws IOException Se a operação de renomear o arquivo falhar.
+     * Retorna o arquivo para ser exibido no navegador (Content-Disposition: inline).
      */
-    @Transactional
-    public ArquivoDTO atualizarMetadados(Long id, ArquivoUpdateDTO dto) throws IOException {
-        Arquivo arquivo = arquivoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com o ID: " + id));
-
-        if (dto.novoNome() != null && !dto.novoNome().equals(arquivo.getNomeArquivo())) {
-
-            Path caminhoAntigo = Paths.get(arquivo.getCaminhoArmazenamento());
-            Path novoCaminho = caminhoAntigo.getParent().resolve(dto.novoNome());
-
-            Files.move(caminhoAntigo, novoCaminho, StandardCopyOption.REPLACE_EXISTING);
-
-            arquivo.setNomeArquivo(dto.novoNome());
-            arquivo.setCaminhoArmazenamento(novoCaminho.toString());
-        }
-
-        Arquivo arquivoAtualizado = arquivoRepository.save(arquivo);
-        return ArquivoDTO.fromEntity(arquivoAtualizado);
-    }
-
-    /**
-     * Substitui o conteúdo de um arquivo por uma nova versão.
-     * @param id ID do arquivo a ser substituído.
-     * @param file O novo arquivo.
-     * @return O DTO do arquivo atualizado.
-     * @throws IOException
-     */
-    @Transactional
-    public ArquivoDTO substituirArquivo(Long id, MultipartFile file) throws IOException {
-        Arquivo arquivo = arquivoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com o ID: " + id));
-
-        // Passo 1: Obtenha a pasta pai do arquivo original
-        // Isso é mais seguro do que usar o caminho completo que pode ter o nome antigo
-        Path diretorioPai = Paths.get(arquivo.getCaminhoArmazenamento()).getParent();
-
-        // Passo 2: Construa o novo caminho do arquivo com base no diretório pai e no novo nome
-        Path novoCaminhoArquivo = Paths.get(diretorioPai.toString(), file.getOriginalFilename());
-
-        try {
-            // Passo 3: Deletar o arquivo antigo, se ele existir
-            Files.deleteIfExists(Paths.get(arquivo.getCaminhoArmazenamento()));
-
-            // Passo 4: Copiar o novo arquivo para o novo caminho
-            Files.copy(file.getInputStream(), novoCaminhoArquivo, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-            // Aqui você pode adicionar um log mais detalhado para o debug
-            System.err.println("Erro ao copiar/excluir arquivo: " + e.getMessage());
-            e.printStackTrace();
-            throw e; // Relança a exceção para que o controller a capture e retorne 500
-        }
-
-        // Passo 5: Atualizar os metadados do arquivo no banco
-        arquivo.setNomeArquivo(file.getOriginalFilename());
-        arquivo.setCaminhoArmazenamento(novoCaminhoArquivo.toString());
-        arquivo.setTamanhoBytes(file.getSize());
-        arquivo.setDataUpload(LocalDateTime.now());
-
-        Arquivo arquivoAtualizado = arquivoRepository.save(arquivo);
-        return ArquivoDTO.fromEntity(arquivoAtualizado);
-    }
-
-    /**
-     * Move um arquivo para uma nova pasta.
-     * @param arquivoId ID do arquivo a ser movido.
-     * @param pastaDestinoId ID da pasta de destino.
-     * @param usuario O usuário que está realizando a operação.
-     * @throws IOException
-     * @throws EntityNotFoundException
-     */
-    @Transactional
-    public void moverArquivo(Long arquivoId, Long pastaDestinoId, Usuario usuario) throws IOException {
+    public ResponseEntity<Resource> abrirNoNavegador(Long arquivoId, Usuario usuarioLogado) throws IOException {
         Arquivo arquivo = arquivoRepository.findById(arquivoId)
-                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com o ID: " + arquivoId));
+                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com ID: " + arquivoId));
 
-        Pasta pastaDestino = pastaRepository.findById(pastaDestinoId)
-                .orElseThrow(() -> new EntityNotFoundException("Pasta de destino não encontrada com o ID: " + pastaDestinoId));
+        // 🔒 Verifica permissão
+        if (!arquivo.getPasta().getUsuariosComPermissao().contains(usuarioLogado)) {
+            throw new AccessDeniedException("Você não possui permissão para acessar este arquivo.");
+        }
 
-        Path caminhoAntigo = Paths.get(arquivo.getCaminhoArmazenamento());
-        Path novoCaminho = Paths.get(pastaDestino.getCaminhoCompleto()).resolve(arquivo.getNomeArquivo());
+        Path caminho = Paths.get(arquivo.getCaminhoArmazenamento());
+        if (!Files.exists(caminho)) {
+            throw new FileNotFoundException("Arquivo não encontrado no sistema de arquivos.");
+        }
 
-        Files.move(caminhoAntigo, novoCaminho, StandardCopyOption.REPLACE_EXISTING);
+        // Detecta o tipo MIME automaticamente
+        String contentType = Files.probeContentType(caminho);
+        if (contentType == null) {
+            contentType = "application/octet-stream";
+        }
 
-        arquivo.setPasta(pastaDestino);
-        arquivo.setCaminhoArmazenamento(novoCaminho.toString());
-        arquivoRepository.save(arquivo);
+        Resource resource = new FileSystemResource(caminho);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + arquivo.getNomeArquivo() + "\"")
+                .body(resource);
     }
 
-    /**
-     * Copia um arquivo para uma nova pasta.
-     * @param arquivoId ID do arquivo a ser copiado.
-     * @param pastaDestinoId ID da pasta de destino.
-     * @param usuario O usuário que está realizando a operação.
-     * @return O DTO do arquivo copiado.
-     * @throws IOException
-     * @throws EntityNotFoundException
-     */
-    @Transactional
-    public ArquivoDTO copiarArquivo(Long arquivoId, Long pastaDestinoId, Usuario usuario) throws IOException {
-        Arquivo arquivoOriginal = arquivoRepository.findById(arquivoId)
-                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com o ID: " + arquivoId));
 
-        Pasta pastaDestino = pastaRepository.findById(pastaDestinoId)
-                .orElseThrow(() -> new EntityNotFoundException("Pasta de destino não encontrada com o ID: " + pastaDestinoId));
 
-        Path caminhoOrigem = Paths.get(arquivoOriginal.getCaminhoArmazenamento());
-        Path caminhoDestino = Paths.get(pastaDestino.getCaminhoCompleto()).resolve(arquivoOriginal.getNomeArquivo());
-
-        Files.copy(caminhoOrigem, caminhoDestino, StandardCopyOption.REPLACE_EXISTING);
-
-        Arquivo novoArquivo = new Arquivo();
-        novoArquivo.setNomeArquivo(arquivoOriginal.getNomeArquivo());
-        novoArquivo.setCaminhoArmazenamento(caminhoDestino.toString());
-        novoArquivo.setTamanhoBytes(arquivoOriginal.getTamanhoBytes());
-        novoArquivo.setDataUpload(LocalDateTime.now());
-        novoArquivo.setPasta(pastaDestino);
-        novoArquivo.setCriadoPor(usuario);
-
-        return ArquivoDTO.fromEntity(arquivoRepository.save(novoArquivo));
-    }
-
-    /**
-     * Busca arquivos por nome em qualquer parte.
-     * @param nome O nome a ser buscado.
-     * @param pageable Objeto de paginação e ordenação.
-     * @return Uma página de DTOs de arquivos.
-     */
-    public Page<ArquivoDTO> buscarPorNome(String nome, Pageable pageable) {
-        Page<Arquivo> arquivos = arquivoRepository.findByNomeArquivoContainingIgnoreCase(nome, pageable);
-        return arquivos.map(ArquivoDTO::fromEntity);
-    }
 }

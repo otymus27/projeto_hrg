@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { environment } from '../../environment/environment.prod';
+import { environment } from '../../environments/environment.prod';
 
 @Injectable({
   providedIn: 'root',
@@ -10,9 +10,9 @@ export class RelatorioService {
   http = inject(HttpClient);
 
   // ✅ Endpoint para a geração de relatórios
-  
+
   // URL base da API (poderia ser movida para environment.ts)
-  private readonly API_URL = environment.apiUrl+'/api/relatorios';
+  private readonly API_URL = environment.apiUrl + '/api/relatorios';
 
   constructor() {}
 

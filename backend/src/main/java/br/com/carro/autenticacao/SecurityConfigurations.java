@@ -3,13 +3,15 @@ package br.com.carro.autenticacao;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
-
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
+import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
@@ -33,162 +35,120 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.ForwardedHeaderFilter;
 
-import com.nimbusds.jose.jwk.source.ImmutableSecret;
-
-import jakarta.annotation.PostConstruct;
-
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity // ✅ Habilita o uso de @PreAuthorize e @PostAuthorize
+@EnableMethodSecurity
 public class SecurityConfigurations {
 
-    // Aqui injetamos o valor de 'jwt.secret' do application.properties/yml
     @Value("${jwt.secret}")
     private String jwtSecret;
 
-    private byte[] secretBytes; // armazenamos a chave já resolvida
     private SecretKey hmacKey;
 
+    // ========================
+    // 🔑 Inicialização da chave secreta
+    // ========================
     @PostConstruct
     public void initSecret() {
-        this.secretBytes = resolveSecretBytes(jwtSecret);
-        if (this.secretBytes.length < 32) {
-            throw new IllegalStateException(
-                    "jwt.secret deve ter pelo menos 32 bytes (256 bits) após o processamento. " +
-                            "Use um segredo mais longo."
-            );
-        }
-        this.hmacKey = new SecretKeySpec(this.secretBytes, "HmacSHA256");
+        byte[] secretBytes = resolveSecretBytes(jwtSecret);
 
-        // ✅ Diagnóstico opcional: loga a chave para verificar a consistência
-        System.out.println("--- Diagnóstico JWT ---");
-        System.out.println("jwt.secret (string) length: " + (jwtSecret == null ? 0 : jwtSecret.length()));
-        System.out.println("secretBytes length: " + this.secretBytes.length + " bytes");
-        // Convertendo para String Base64 para visualização (NÃO FAÇA EM PROD SE FOR MUITO SENSIBIL)
-        System.out.println("SecretKey (Base64 encoded for debug): " + Base64.getEncoder().encodeToString(this.secretBytes));
-        System.out.println("--- Fim Diagnóstico JWT ---");
+        if (secretBytes.length < 32) {
+            throw new IllegalStateException("jwt.secret deve ter pelo menos 32 bytes (256 bits).");
+        }
+
+        this.hmacKey = new SecretKeySpec(secretBytes, "HmacSHA256");
+
+        // Log de diagnóstico (apenas para dev)
+        System.out.println("--- JWT Config ---");
+        System.out.println("Secret length (bytes): " + secretBytes.length);
+        System.out.println("Secret Base64: " + Base64.getEncoder().encodeToString(secretBytes));
+        System.out.println("--- Fim JWT Config ---");
     }
 
     private byte[] resolveSecretBytes(String raw) {
         if (raw == null || raw.isBlank()) {
             throw new IllegalStateException("jwt.secret não definido");
         }
-
-        // 1) tenta Base64-URL
         try {
             return Base64.getUrlDecoder().decode(raw);
         } catch (IllegalArgumentException ignored) {}
-
-        // 2) tenta Base64 padrão
         try {
             return Base64.getDecoder().decode(raw);
         } catch (IllegalArgumentException ignored) {}
-
-        // 3) usa como texto puro (UTF-8)
         return raw.getBytes(StandardCharsets.UTF_8);
     }
 
-     @Bean
+    // ========================
+    // 🌍 Configuração CORS
+    // ========================
+    @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
+        CorsConfiguration config = new CorsConfiguration();
 
-        // Usado para só desenvolvimento
-//        configuration.addAllowedOrigin("http://localhost:4200");  // ou http://localhost
-//        configuration.addAllowedOrigin("http://localhost:8082");  // ou http://localhost
-//        configuration.addAllowedOrigin("http://localhost");
-//        configuration.addAllowedOrigin("null"); // Para acesso via arquivo local (file://)
+        // Origens liberadas (Dev + Produção)
+        config.setAllowedOrigins(Arrays.asList(
+                "http://localhost:4200",   // Angular dev
+                "http://localhost:86",     // Nginx local
+                "http://10.85.190.202:86", // Nginx na rede
+                "http://10.85.190.202",    // acesso direto
+                "null"                     // file://
+        ));
 
+        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(Arrays.asList("*"));
+        config.addExposedHeader(HttpHeaders.CONTENT_DISPOSITION); // necessário para downloads
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
 
-         // ✅ CORREÇÃO: Liste explicitamente as origens permitidas depois tem que apagar
-         // Inclui a sua aplicação local e "null" para o acesso via arquivo HTML
-         configuration.setAllowedOrigins(Arrays.asList(
-                 "http://localhost:4200", // Origem do seu frontend Angular
-                 "http://localhost:8082", // Opcional, mas útil para testes
-                 "http://localhost",
-                 "http://localhost:86",
-                 "http://10.85.190.202:86",
-                 "null" // Para acesso via arquivo local (file://)
-         ));
-
-
-         // Usado para produção
-         configuration.addAllowedOrigin("http://localhost:86");  // ou http://localhost:80
-         configuration.addAllowedOrigin("http://10.85.190.202:86"); // IP da sua máquina servidor
-         configuration.addAllowedMethod("*"); // GET, POST, etc.
-         configuration.addAllowedHeader("*"); // Authorization, Content-Type...
-         configuration.setAllowCredentials(true); // se usar cookies ou auth
-         configuration.setMaxAge(3600L);
-
-         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-         source.registerCorsConfiguration("/**", configuration);
-
-         return source;
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 
+    // ========================
+    // 🔐 Configuração de segurança HTTP
+    // ========================
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable()) // Desabilita o CSRF para API
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   SessionTrackingFilter sessionTrackingFilter) throws Exception {
+
+        http.csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                                .requestMatchers(HttpMethod.POST, "/login").permitAll() // ✅ Permite acesso público ao endpoint de login
-                                // ✅ Permite POST para /api/login sem autenticação
-                                .requestMatchers(HttpMethod.POST, "/api/login").permitAll()
-                                // ✅ Permite OPTIONS para qualquer endpoint
-                                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                                // ✅ Permite acesso a qualquer rota pública (incluindo as novas)
-                                .requestMatchers(HttpMethod.GET, "/api/publico/**").permitAll()
-//                        .requestMatchers(HttpMethod.GET, "/api/pasta/top-level").permitAll()
-                                .requestMatchers(HttpMethod.GET, "/api/privado/pastas/download").authenticated() // ✅ Novo: Protege especificamente o download
-
-
-
-
-                                .anyRequest().authenticated()
+                        .requestMatchers(HttpMethod.POST, "/login", "/api/login").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/public/**").permitAll() // ✅ corrigido
+                        .requestMatchers(HttpMethod.GET, "/api/publico/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/privado/pastas/download").authenticated()
+                        .anyRequest().authenticated()
                 )
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))) // Configura o servidor de recursos OAuth2 para usar JWT
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)); // Garante que sessões não serão criadas
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
+
+        // 🔥 Registra filtro de tracking
+        http.addFilterAfter(sessionTrackingFilter,
+                org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-
-
-    // ✅ BEAN ATUALIZADO: Configura como as autoridades são extraídas do JWT para Spring Security 6.x+
+    // ========================
+    // ⚙️ Beans auxiliares
+    // ========================
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
-        JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        authoritiesConverter.setAuthorityPrefix("ROLE_");
+        authoritiesConverter.setAuthoritiesClaimName("roles");
 
-        // 👉 Ajusta o prefixo do claim de roles (senão fica "SCOPE_" por padrão)
-        grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
-        grantedAuthoritiesConverter.setAuthoritiesClaimName("roles");
-
-        JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
-        jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(grantedAuthoritiesConverter);
-
-        return jwtAuthenticationConverter;
+        JwtAuthenticationConverter jwtConverter = new JwtAuthenticationConverter();
+        jwtConverter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+        return jwtConverter;
     }
 
-    // @Bean
-    // public CorsConfigurationSource corsConfigurationSource() {
-    //     CorsConfiguration configuration = new CorsConfiguration();
-    //     // ✅ Use o IP real da sua máquina e a porta do Nginx
-    //     configuration.setAllowedOrigins(Arrays.asList("http://10.85.190.202:86")); 
-    //     // ✅ O restante da configuração pode ficar igual
-    //     configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-    //     configuration.setAllowedHeaders(Arrays.asList("*"));
-    //     configuration.setAllowCredentials(false);
-    //     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-    //     source.registerCorsConfiguration("/**", configuration);
-    //     return source;
-    // }
-
     @Bean
-    public AuthenticationManager authenticationManager(
-            UserDetailsService userDetailsService,
-            PasswordEncoder passwordEncoder) {
-
+    public AuthenticationManager authenticationManager(UserDetailsService userDetailsService,
+                                                       PasswordEncoder passwordEncoder) {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
         provider.setUserDetailsService(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder);
@@ -197,22 +157,12 @@ public class SecurityConfigurations {
 
     @Bean
     public JwtEncoder jwtEncoder() {
-        // ✅ ADICIONADO: Log para verificar a chave sendo usada pelo encoder
-        System.out.println("--- Diagnóstico JWT (JwtEncoder) ---");
-        System.out.println("JwtEncoder usando SecretKey (Base64 encoded): " + Base64.getEncoder().encodeToString(this.hmacKey.getEncoded()));
-        System.out.println("--- Fim Diagnóstico JWT (JwtEncoder) ---");
-        // ✅ CORREÇÃO: Usa a 'hmacKey' já resolvida para garantir consistência
         return new NimbusJwtEncoder(new ImmutableSecret<>(this.hmacKey));
     }
 
     @Bean
     public JwtDecoder jwtDecoder() {
-        // ✅ ADICIONADO: Log para verificar a chave sendo usada pelo decoder
-        System.out.println("--- Diagnóstico JWT (JwtDecoder) ---");
-        System.out.println("JwtDecoder usando SecretKey (Base64 encoded): " + Base64.getEncoder().encodeToString(this.hmacKey.getEncoded()));
-        System.out.println("--- Fim Diagnóstico JWT (JwtDecoder) ---");
-        // Usa a mesma chave no decoder
-        return NimbusJwtDecoder.withSecretKey(hmacKey).build();
+        return NimbusJwtDecoder.withSecretKey(this.hmacKey).build();
     }
 
     @Bean

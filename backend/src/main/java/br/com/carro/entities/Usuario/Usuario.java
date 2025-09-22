@@ -31,6 +31,9 @@ public class Usuario implements UserDetails {
     @Column(unique = true)
     private String username;
     private String password;
+    // ✅ Novo campo: Nome completo do usuário
+    @Column(name = "nome_completo", nullable = false, length = 150)
+    private String nome;
 
     /**
      * Indica se a senha atual é provisória.
@@ -98,5 +101,14 @@ public class Usuario implements UserDetails {
     public boolean isEnabled() {
         // Por padrão, retorne 'true' para indicar que a conta está habilitada.
         return true;
+    }
+
+    /**
+     * Verifica se o usuário possui a role de administrador.
+     * @return true se o usuário for um administrador, false caso contrário.
+     */
+    public boolean isAdmin() {
+        return this.roles.stream()
+                .anyMatch(role -> "ADMIN".equals(role.getNome()));
     }
 }

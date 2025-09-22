@@ -5,9 +5,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -15,25 +15,22 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.security.web.AuthenticationEntryPoint;
-import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 
-@Component // necessário para o Spring enxergar como bean e usar no SecurityConfig
+import java.io.IOException;
+import java.util.stream.Collectors;
+
+@Component
 @ControllerAdvice
 public class ApiExceptionHandler implements AuthenticationEntryPoint {
 
-    // Método para tratar erro de chave duplicada
     @ResponseBody
     @ExceptionHandler(DataIntegrityViolationException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
-    public Map<String, String> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
-        Map<String, String> error = new HashMap<>();
-        error.put("erro", "Violação de integridade");
-
+    public ErrorMessage handleDataIntegrityViolation(DataIntegrityViolationException ex, HttpServletRequest request) {
+        String mensagem = "Operação não permitida: o recurso está em uso ou viola uma restrição.";
         String message = ex.getRootCause() != null ? ex.getRootCause().getMessage() : ex.getMessage();
 
         if (message != null && message.toLowerCase().contains("duplicate entry")) {
@@ -41,9 +38,9 @@ public class ApiExceptionHandler implements AuthenticationEntryPoint {
             try {
                 int keyIndex = message.toLowerCase().indexOf("for key");
                 if (keyIndex != -1) {
-                    String key = message.substring(keyIndex).replace("for key", "").replace("'", "").trim(); // ex: tb_carro.placa
+                    String key = message.substring(keyIndex).replace("for key", "").replace("'", "").trim();
                     if (key.contains(".")) {
-                        campo = key.split("\\.")[1]; // pega apenas "placa"
+                        campo = key.split("\\.")[1];
                     } else {
                         campo = key;
                     }
@@ -51,120 +48,155 @@ public class ApiExceptionHandler implements AuthenticationEntryPoint {
             } catch (Exception e) {
                 campo = "desconhecido";
             }
-
-            error.put("campo", campo);
-            error.put("mensagem", "Valor duplicado para o campo '" + campo + "'.");
-        } else {
-            error.put("mensagem", "Operação não permitida: o recurso está em uso ou viola uma restrição.");
+            mensagem = "Valor duplicado para o campo '" + campo + "'.";
         }
 
-        return error;
-    }
-
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex) {
-        if (ex.getMessage().contains("CPF já cadastrado")) {
-            return new ResponseEntity<>(
-                    Collections.singletonMap("error", ex.getMessage()),
-                    HttpStatus.BAD_REQUEST // 400
-            );
-        }
-        return new ResponseEntity<>(
-                Collections.singletonMap("error", "Ocorreu um erro interno."),
-                HttpStatus.INTERNAL_SERVER_ERROR // 500
+        return new ErrorMessage(
+                HttpStatus.CONFLICT.value(),
+                "Violação de integridade",
+                mensagem,
+                request.getRequestURI()
         );
     }
 
+    @ResponseBody
+    @ExceptionHandler(ResourceNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ErrorMessage handleResourceNotFound(ResourceNotFoundException ex, HttpServletRequest request) {
+        return new ErrorMessage(
+                HttpStatus.NOT_FOUND.value(),
+                "Recurso não encontrado",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+    }
 
     @ResponseBody
     @ExceptionHandler(DadosInvalidosException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public Map<String, String> handleDadosInvalidos(DadosInvalidosException ex) {
-        Map<String, String> error = new HashMap<>();
-        error.put("erro", "Dados inválidos");
-        error.put("mensagem", ex.getMessage());
-        return error;
+    public ErrorMessage handleDadosInvalidos(DadosInvalidosException ex, HttpServletRequest request) {
+        return new ErrorMessage(
+                HttpStatus.BAD_REQUEST.value(),
+                "Dados inválidos",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
     }
 
     @ResponseBody
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public Map<String, String> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getFieldErrors().forEach(error ->
-                errors.put(error.getField(), error.getDefaultMessage()));
-        return errors;
+    public ErrorMessage handleValidationExceptions(MethodArgumentNotValidException ex, HttpServletRequest request) {
+        String erros = ex.getBindingResult()
+                .getFieldErrors()
+                .stream()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .collect(Collectors.joining(", "));
+        return new ErrorMessage(
+                HttpStatus.BAD_REQUEST.value(),
+                "Validação falhou",
+                erros,
+                request.getRequestURI()
+        );
     }
 
     @ResponseBody
     @ExceptionHandler(BadCredentialsException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
-    public Map<String, String> handleBadCredentials(BadCredentialsException ex) {
-        Map<String, String> error = new HashMap<>();
-        error.put("erro", "Credenciais inválidas");
-        error.put("mensagem", "Usuário ou senha incorretos.");
-        return error;
+    public ErrorMessage handleBadCredentials(BadCredentialsException ex, HttpServletRequest request) {
+        return new ErrorMessage(
+                HttpStatus.UNAUTHORIZED.value(),
+                "Credenciais inválidas",
+                "Usuário ou senha incorretos.",
+                request.getRequestURI()
+        );
     }
 
     @ResponseBody
     @ExceptionHandler(AuthorizationDeniedException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
-    public Map<String, String> handleAuthorizationDenied(AuthorizationDeniedException ex) {
-        Map<String, String> error = new HashMap<>();
-        error.put("erro", "Acesso negado, tem que ter perfil de Administrador!!!");
-        error.put("mensagem", ex.getMessage()); // Ou uma mensagem fixa, se preferir
-        return error;
-    }
-
-    @ResponseBody
-    @ExceptionHandler(Exception.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public Map<String, String> handleGenericException(Exception ex) {
-        Map<String, String> error = new HashMap<>();
-        error.put("erro", "Erro interno no servidor");
-        error.put("mensagem", "Ocorreu um erro inesperado. Por favor, tente novamente mais tarde.");
-        // Log the exception for debugging purposes
-        ex.printStackTrace();
-        return error;
+    public ErrorMessage handleAuthorizationDenied(AuthorizationDeniedException ex, HttpServletRequest request) {
+        return new ErrorMessage(
+                HttpStatus.FORBIDDEN.value(),
+                "Acesso negado",
+                "Você não tem permissão para acessar este recurso.",
+                request.getRequestURI()
+        );
     }
 
     @ResponseBody
     @ExceptionHandler(NoHandlerFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    public Map<String, String> handleNoHandlerFoundException(NoHandlerFoundException ex) {
-        Map<String, String> error = new HashMap<>();
-        error.put("erro", "Endpoint não encontrado");
-        error.put("mensagem", "O caminho '" + ex.getRequestURL() + "' não existe.");
-        error.put("path", ex.getRequestURL());
-        return error;
+    public ErrorMessage handleNoHandlerFoundException(NoHandlerFoundException ex, HttpServletRequest request) {
+        return new ErrorMessage(
+                HttpStatus.NOT_FOUND.value(),
+                "Endpoint não encontrado",
+                "O caminho '" + ex.getRequestURL() + "' não existe.",
+                ex.getRequestURL()
+        );
     }
 
     @ResponseBody
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public Map<String, String> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
-        Map<String, String> error = new HashMap<>();
-        error.put("erro", "Tipo de argumento inválido");
-        error.put("mensagem", "O ID fornecido '" + ex.getValue() + "' não é um formato válido. Espera-se um número.");
-        return error;
+    public ErrorMessage handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+        return new ErrorMessage(
+                HttpStatus.BAD_REQUEST.value(),
+                "Tipo de argumento inválido",
+                "O valor '" + ex.getValue() + "' não é um formato válido. Espera-se um número.",
+                request.getRequestURI()
+        );
     }
 
-    // Método para tratar quando o usuário não está autenticado
+    @ResponseBody
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
+    public ErrorMessage handleMaxSizeException(MaxUploadSizeExceededException ex, HttpServletRequest request) {
+        return new ErrorMessage(
+                HttpStatus.PAYLOAD_TOO_LARGE.value(),
+                "Arquivo muito grande",
+                "O tamanho máximo permitido para upload é 20MB.",
+                request.getRequestURI()
+        );
+    }
+
+    @ResponseBody
+    @ExceptionHandler(Exception.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ErrorMessage handleGenericException(Exception ex, HttpServletRequest request) {
+        ex.printStackTrace();
+        return new ErrorMessage(
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                "Erro interno no servidor",
+                "Ocorreu um erro inesperado. Por favor, tente novamente mais tarde.",
+                request.getRequestURI()
+        );
+    }
+
     @Override
     public void commence(HttpServletRequest request,
                          HttpServletResponse response,
-                         org.springframework.security.core.AuthenticationException authException) throws IOException {
-        System.out.println("===> Método commence() chamado!");
-
-        String path = request.getRequestURI();
-        // Simula checagem de endpoint válido (ideal: fazer isso com mais controle)
-        boolean endpointValido = path.matches("(/login|/usuarios|/outros-validos)(/.*)?");
-
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        new ObjectMapper().writeValue(response.getOutputStream(), Map.of(
-                "erro", "Não autorizado",
-                "mensagem", "Você precisa estar autenticado para acessar este recurso.",
-                "path", path
-        ));
+                         AuthenticationException authException) throws IOException {
+        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        new ObjectMapper().writeValue(response.getOutputStream(),
+                new ErrorMessage(
+                        HttpStatus.UNAUTHORIZED.value(),
+                        "Não autorizado",
+                        "Você precisa estar autenticado para acessar este recurso.",
+                        request.getRequestURI()
+                ));
     }
+
+    @ResponseBody
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorMessage handleIllegalArgumentException(IllegalArgumentException ex, HttpServletRequest request) {
+        return new ErrorMessage(
+                HttpStatus.BAD_REQUEST.value(),
+                "Dados inválidos",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+    }
+
 }
