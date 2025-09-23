@@ -7,6 +7,7 @@ import {
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { Usuario } from '../../../models/usuario';
+import { environment } from '../../../../environments/environment.prod';
 
 // ---------------- DTOs / Interfaces ----------------
 // ✅ INTERFACE PAGINACAO COMPLETA
@@ -87,10 +88,15 @@ export interface ErrorMessage {
 // ---------------- Serviço ----------------
 @Injectable({ providedIn: 'root' })
 export class AdminService {
-  private readonly apiUrlAdminPastas = 'http://localhost:8082/api/pastas';
-  private readonly apiUrlAdminArquivos = 'http://localhost:8082/api/arquivos';
-  private readonly apiUrlPublica = 'http://localhost:8082/api/publico';
-  private readonly apiUrlUsuarios = 'http://localhost:8082/api/usuario';
+  // private readonly apiUrlAdminPastas = 'http://localhost:8082/api/pastas';
+  // private readonly apiUrlAdminArquivos = 'http://localhost:8082/api/arquivos';
+  // private readonly apiUrlPublica = 'http://localhost:8082/api/publico';
+  // private readonly apiUrlUsuarios = 'http://localhost:8082/api/usuario';
+
+  private readonly apiUrlAdminPastas = `${environment.apiUrl}/pastas`;
+  private readonly apiUrlAdminArquivos = `${environment.apiUrl}/arquivos`;
+  private readonly apiUrlPublica = `${environment.apiUrl}/publico`;
+  private readonly apiUrlUsuarios = `${environment.apiUrl}/usuario`;
 
   constructor(private http: HttpClient) {}
 
@@ -320,15 +326,29 @@ export class AdminService {
   // ---------------- Erro centralizado ----------------
   private tratarErro(error: HttpErrorResponse) {
     console.error('Erro capturado no AdminService:', error);
-
+  
+    // ✅ Caso especial para uploads muito grandes
+    if (error.status === 413) {
+      const erroBackend: ErrorMessage = {
+        status: 413,
+        error: 'Arquivo muito grande',
+        message: 'O arquivo enviado excede o limite permitido pelo servidor.',
+        path: error.url || '',
+        timestamp: new Date().toISOString(),
+      };
+      return throwError(() => erroBackend);
+    }
+  
+    // 🔹 Demais casos (fallback)
     const erroBackend: ErrorMessage = {
       status: error.status,
       error: error.error?.error || 'Erro desconhecido',
       message: error.error?.message || 'Erro ao processar requisição',
-      path: error.error?.path || '',
+      path: error.error?.path || error.url || '',
       timestamp: error.error?.timestamp || new Date().toISOString(),
     };
-
+  
     return throwError(() => erroBackend);
   }
+  
 }

@@ -1,13 +1,14 @@
 package br.com.carro.exceptions;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.stream.Collectors;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -17,10 +18,11 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
-import org.springframework.security.web.AuthenticationEntryPoint;
 
-import java.io.IOException;
-import java.util.stream.Collectors;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Component
 @ControllerAdvice
@@ -152,10 +154,24 @@ public class ApiExceptionHandler implements AuthenticationEntryPoint {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
     public ErrorMessage handleMaxSizeException(MaxUploadSizeExceededException ex, HttpServletRequest request) {
+
+        System.err.println("Upload excedeu limite: " + ex.getMessage());
         return new ErrorMessage(
                 HttpStatus.PAYLOAD_TOO_LARGE.value(),
                 "Arquivo muito grande",
-                "O tamanho máximo permitido para upload é 20MB.",
+                "O tamanho máximo permitido para upload é 50MB.",
+                request.getRequestURI()
+        );
+    }
+
+    @ResponseBody
+    @ExceptionHandler(org.apache.tomcat.util.http.fileupload.impl.SizeLimitExceededException.class)
+    @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
+    public ErrorMessage handleSizeLimitExceeded(org.apache.tomcat.util.http.fileupload.impl.SizeLimitExceededException ex, HttpServletRequest request) {
+        return new ErrorMessage(
+                HttpStatus.PAYLOAD_TOO_LARGE.value(),
+                "Arquivo muito grande",
+                "O arquivo enviado excede o limite configurado no servidor.",
                 request.getRequestURI()
         );
     }

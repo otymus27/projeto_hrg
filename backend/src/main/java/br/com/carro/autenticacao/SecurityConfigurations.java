@@ -3,11 +3,10 @@ package br.com.carro.autenticacao;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
+
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
-import com.nimbusds.jose.jwk.source.ImmutableSecret;
-import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -34,6 +33,10 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.ForwardedHeaderFilter;
+
+import com.nimbusds.jose.jwk.source.ImmutableSecret;
+
+import jakarta.annotation.PostConstruct;
 
 @Configuration
 @EnableWebSecurity
@@ -94,8 +97,13 @@ public class SecurityConfigurations {
                 "null"                     // file://
         ));
 
+        // 🔓 Libera qualquer origem que use a porta 86 (seja localhost, IP da rede ou DNS)
+        config.addAllowedOriginPattern("http://*:86");
+
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(Arrays.asList("*"));
+       
+
         config.addExposedHeader(HttpHeaders.CONTENT_DISPOSITION); // necessário para downloads
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);

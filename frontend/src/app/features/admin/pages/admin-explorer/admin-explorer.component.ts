@@ -50,7 +50,7 @@ export class AdminExplorerComponent implements OnInit {
 
   // ------------ORDENAÇÃO------------
   ordenarPor: string = 'nome'; // campo padrão
-  ordemAsc: boolean = true;    // ordem padrão
+  ordemAsc: boolean = true; // ordem padrão
 
   // ------------FILTROS------------
   filtroNome: string = '';
@@ -105,15 +105,18 @@ export class AdminExplorerComponent implements OnInit {
     if (idPastaInicial) {
       // Abre direto a pasta configurada na rota (ex: Farmácia)
       this.loading = true;
-      this.adminService.getPastaPorId(idPastaInicial, this.ordenarPor, this.ordemAsc).subscribe({
-        next: (pasta) => {
-          this.breadcrumb = [pasta]; // já adiciona no breadcrumb
-          this.pastas = pasta.subPastas ?? [];
-          this.arquivos = pasta.arquivos ?? [];
-          this.loading = false;
-        },
-        error: (err) => this.handleError('Erro ao carregar pasta inicial', err),
-      });
+      this.adminService
+        .getPastaPorId(idPastaInicial, this.ordenarPor, this.ordemAsc)
+        .subscribe({
+          next: (pasta) => {
+            this.breadcrumb = [pasta]; // já adiciona no breadcrumb
+            this.pastas = pasta.subPastas ?? [];
+            this.arquivos = pasta.arquivos ?? [];
+            this.loading = false;
+          },
+          error: (err) =>
+            this.handleError('Erro ao carregar pasta inicial', err),
+        });
     } else {
       // Fluxo normal (raiz)
       this.recarregarConteudo();
@@ -145,21 +148,26 @@ export class AdminExplorerComponent implements OnInit {
       .listarConteudoRaiz(this.ordenarPor, this.ordemAsc, this.filtroNome)
       .subscribe({
         next: (pastas) => {
+          // 🔹 Coleta todas as pastas que bateram (já vem filtradas do backend)
           this.pastas = pastas;
-          this.arquivos = [];
+
+          // 🔹 Coleta arquivos em qualquer nível (flatten recursivo)
+          this.arquivos = this.coletarArquivosRecursivo(pastas);
+
+          console.log('Pastas recebidas:', pastas);
+          console.log('Arquivos coletados:', this.arquivos);
+
+          // 🔹 Zera o breadcrumb porque é busca global
           this.breadcrumb = [];
           this.loading = false;
 
-          // 🔹 limpa o campo após a busca se for pelo Enter
           if (limparDepois) {
             this.filtroNome = '';
           }
         },
-        error: (err) => this.handleError('Erro ao buscar pastas', err),
+        error: (err) => this.handleError('Erro ao buscar conteúdo', err),
       });
   }
-
-
   // ---------------- Navegação ----------------
   recarregarConteudo(): void {
     const pastaAtual = this.obterPastaAtual();
@@ -169,33 +177,36 @@ export class AdminExplorerComponent implements OnInit {
   }
 
   carregarConteudoRaiz(): void {
-  this.loading = true;
-  this.adminService.listarConteudoRaiz(this.ordenarPor, this.ordemAsc, this.filtroNome).subscribe({
-    next: (pastas) => {
-      this.pastas = pastas;
-      this.arquivos = [];
-      this.breadcrumb = [];
-      this.loading = false;
-    },
-    error: (err) => this.handleError('Erro ao carregar raiz', err),
-  });
-}
+    this.loading = true;
+    this.adminService
+      .listarConteudoRaiz(this.ordenarPor, this.ordemAsc, this.filtroNome)
+      .subscribe({
+        next: (pastas) => {
+          this.pastas = pastas;
+          this.arquivos = [];
+          this.breadcrumb = [];
+          this.loading = false;
+        },
+        error: (err) => this.handleError('Erro ao carregar raiz', err),
+      });
+  }
 
-abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
-  if (!pasta) return;
-  if (adicionarBreadcrumb) this.breadcrumb.push(pasta);
+  abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
+    if (!pasta) return;
+    if (adicionarBreadcrumb) this.breadcrumb.push(pasta);
 
-  this.loading = true;
-  this.adminService.getPastaPorId(pasta.id, this.ordenarPor, this.ordemAsc, this.filtroNome).subscribe({
-    next: (detalhada) => {
-      this.pastas = detalhada.subPastas ?? [];
-      this.arquivos = detalhada.arquivos ?? [];
-      this.loading = false;
-    },
-    error: (err) => this.handleError('Erro ao abrir pasta', err),
-  });
-}
-
+    this.loading = true;
+    this.adminService
+      .getPastaPorId(pasta.id, this.ordenarPor, this.ordemAsc, this.filtroNome)
+      .subscribe({
+        next: (detalhada) => {
+          this.pastas = detalhada.subPastas ?? [];
+          this.arquivos = detalhada.arquivos ?? [];
+          this.loading = false;
+        },
+        error: (err) => this.handleError('Erro ao abrir pasta', err),
+      });
+  }
 
   navegarPara(index: number): void {
     if (index < 0) return this.carregarConteudoRaiz();
@@ -334,7 +345,9 @@ abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
   }
   toggleSelecao(item: PastaCompletaDTO | ArquivoAdmin): void {
     this.isSelecionado(item)
-      ? (this.itensSelecionados = this.itensSelecionados.filter((i) => i !== item))
+      ? (this.itensSelecionados = this.itensSelecionados.filter(
+          (i) => i !== item
+        ))
       : this.itensSelecionados.push(item);
   }
   get todosItens(): (PastaCompletaDTO | ArquivoAdmin)[] {
@@ -347,7 +360,9 @@ abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
     this.itensSelecionados = [];
   }
   inverterSelecao(): void {
-    this.itensSelecionados = this.todosItens.filter((i) => !this.isSelecionado(i));
+    this.itensSelecionados = this.todosItens.filter(
+      (i) => !this.isSelecionado(i)
+    );
   }
 
   // ---------------- Exclusão ----------------
@@ -389,7 +404,9 @@ abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
     if (!this.itensSelecionados.length) return;
 
     const pastasSelecionadas = this.itensSelecionados.filter(this.isPasta);
-    const arquivosSelecionados = this.itensSelecionados.filter((i) => !this.isPasta(i));
+    const arquivosSelecionados = this.itensSelecionados.filter(
+      (i) => !this.isPasta(i)
+    );
 
     const requests: Observable<any>[] = [];
 
@@ -467,7 +484,9 @@ abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
 
     this.adminService.listarConteudoRaiz().subscribe({
       next: (pastas) => {
-        this.pastasDisponiveisParaCopiar = pastas.filter((p) => p.id !== pasta.id);
+        this.pastasDisponiveisParaCopiar = pastas.filter(
+          (p) => p.id !== pasta.id
+        );
       },
     });
   }
@@ -482,14 +501,16 @@ abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
     const destinoId = this.pastaDestinoSelecionada?.id;
 
     this.loading = true;
-    this.adminService.copiarPasta(this.pastaParaCopiar.id, destinoId).subscribe({
-      next: () => {
-        this.recarregarConteudo();
-        this.fecharModalCopiarPasta();
-        this.loading = false;
-      },
-      error: (err) => this.handleError('Erro ao copiar pasta', err),
-    });
+    this.adminService
+      .copiarPasta(this.pastaParaCopiar.id, destinoId)
+      .subscribe({
+        next: () => {
+          this.recarregarConteudo();
+          this.fecharModalCopiarPasta();
+          this.loading = false;
+        },
+        error: (err) => this.handleError('Erro ao copiar pasta', err),
+      });
   }
 
   // ---------------- Mover ----------------
@@ -500,7 +521,9 @@ abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
 
     this.adminService.listarConteudoRaiz().subscribe({
       next: (pastas) => {
-        this.pastasDisponiveisParaMover = pastas.filter((p) => p.id !== pasta.id);
+        this.pastasDisponiveisParaMover = pastas.filter(
+          (p) => p.id !== pasta.id
+        );
       },
     });
   }
@@ -510,9 +533,12 @@ abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
     this.pastaDestinoMover = null;
     this.pastasDisponiveisParaMover = [];
   }
+
   moverPasta(): void {
     if (!this.pastaParaMover) return;
-    const destinoId = this.pastaDestinoMover ? this.pastaDestinoMover.id : undefined;
+    const destinoId = this.pastaDestinoMover
+      ? this.pastaDestinoMover.id
+      : undefined;
 
     this.loading = true;
     this.adminService.moverPasta(this.pastaParaMover.id, destinoId).subscribe({
@@ -525,15 +551,39 @@ abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
     });
   }
 
+  // abrirModalMoverArquivo(arquivo: ArquivoAdmin): void {
+  //   this.arquivoParaMover = arquivo;
+  //   this.modalMoverArquivoAberto = true;
+  //   this.pastaDestinoArquivo = null;
+
+  //   this.adminService.listarConteudoRaiz().subscribe({
+  //     next: (pastas) => (this.pastasDisponiveisParaMover = pastas),
+  //   });
+  // }
+
   abrirModalMoverArquivo(arquivo: ArquivoAdmin): void {
     this.arquivoParaMover = arquivo;
     this.modalMoverArquivoAberto = true;
     this.pastaDestinoArquivo = null;
 
+    // Carrega todas as pastas a partir da raiz
     this.adminService.listarConteudoRaiz().subscribe({
-      next: (pastas) => (this.pastasDisponiveisParaMover = pastas),
+      next: (pastas) => {
+        // 🔹 Transforma em lista plana (raiz + filhos + netos)
+        this.pastasDisponiveisParaMover = this.flattenPastas(pastas);
+
+        // 🔹 Remove a pasta atual para evitar mover para o mesmo lugar
+        const pastaAtual = this.obterPastaAtual();
+        if (pastaAtual) {
+          this.pastasDisponiveisParaMover =
+            this.pastasDisponiveisParaMover.filter(
+              (p) => p.id !== pastaAtual.id
+            );
+        }
+      },
     });
   }
+
   fecharModalMoverArquivo(): void {
     this.modalMoverArquivoAberto = false;
     this.arquivoParaMover = null;
@@ -541,13 +591,27 @@ abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
     this.pastasDisponiveisParaMover = [];
   }
   moverArquivo(): void {
-    if (!this.arquivoParaMover || !this.pastaDestinoArquivo) return;
+    if (!this.arquivoParaMover || !this.pastaDestinoArquivo?.id) return;
+
+    console.log(
+      'Mover arquivo:',
+      this.arquivoParaMover.id,
+      '→',
+      this.pastaDestinoArquivo.id
+    );
+
+    if (this.pastaDestinoArquivo.id === this.pastaParaMover?.id) {
+      this.toastService.showInfo('O arquivo já está nesta pasta.');
+      this.fecharModalMoverArquivo();
+      return;
+    }
 
     this.loading = true;
     this.adminService
       .moverArquivo(this.arquivoParaMover.id, this.pastaDestinoArquivo.id)
       .subscribe({
         next: () => {
+          this.toastService.showSuccess('Arquivo movido com sucesso!');
           this.recarregarConteudo();
           this.fecharModalMoverArquivo();
           this.loading = false;
@@ -623,7 +687,11 @@ abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
       if (this.modalAtivo === 'criarPasta') {
         this.usuariosSelecionados.push(usuario);
       } else if (this.modalAtivo === 'permissao') {
-        this.usuariosComPermissao.push({ id: usuario.id, username: usuario.username, nome:usuario.nome });
+        this.usuariosComPermissao.push({
+          id: usuario.id,
+          username: usuario.username,
+          nome: usuario.nome,
+        });
         this.atualizarListaDeDisponiveis();
       }
     }
@@ -631,10 +699,14 @@ abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
     this.modalAtivo = null;
   }
   removerUsuarioSelecionado(usuario: Usuario) {
-    this.usuariosSelecionados = this.usuariosSelecionados.filter((u) => u.id !== usuario.id);
+    this.usuariosSelecionados = this.usuariosSelecionados.filter(
+      (u) => u.id !== usuario.id
+    );
   }
   removerUsuarioPermissao(usuario: UsuarioResumoDTO): void {
-    this.usuariosComPermissao = this.usuariosComPermissao.filter((u) => u.id !== usuario.id);
+    this.usuariosComPermissao = this.usuariosComPermissao.filter(
+      (u) => u.id !== usuario.id
+    );
     this.atualizarListaDeDisponiveis();
   }
   private atualizarListaDeDisponiveis(): void {
@@ -650,7 +722,9 @@ abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
     }
 
     const idsAtuais = new Set(this.usuariosComPermissao.map((u) => u.id));
-    const idsIniciais = new Set(this.usuariosIniciaisComPermissao.map((u) => u.id));
+    const idsIniciais = new Set(
+      this.usuariosIniciaisComPermissao.map((u) => u.id)
+    );
 
     const adicionarUsuariosIds = this.usuariosComPermissao
       .filter((u) => !idsIniciais.has(u.id))
@@ -697,16 +771,65 @@ abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
 
     let errorMessage = mensagemPadrao;
 
-    if (err && err.error && typeof err.error === 'object' && 'status' in err.error) {
+    if (
+      err &&
+      err.error &&
+      typeof err.error === 'object' &&
+      'status' in err.error
+    ) {
       const backend = err.error as ErrorMessage;
-      errorMessage = `Erro (${backend.status}${backend.error ? ' - ' + backend.error : ''}): ${backend.message || mensagemPadrao}`;
+      errorMessage = `Erro (${backend.status}${
+        backend.error ? ' - ' + backend.error : ''
+      }): ${backend.message || mensagemPadrao}`;
     } else if (err && typeof err === 'object' && 'status' in err) {
       const backend = err as ErrorMessage;
-      errorMessage = `Erro (${backend.status}${backend.error ? ' - ' + backend.error : ''}): ${backend.message || mensagemPadrao}`;
+      errorMessage = `Erro (${backend.status}${
+        backend.error ? ' - ' + backend.error : ''
+      }): ${backend.message || mensagemPadrao}`;
     }
 
     this.toastService.showError(errorMessage);
     this.loading = false;
+  }
+
+  private flattenPastas(
+    pastas: PastaCompletaDTO[],
+    prefix: string = ''
+  ): PastaCompletaDTO[] {
+    let lista: PastaCompletaDTO[] = [];
+
+    for (const pasta of pastas) {
+      // adiciona a pasta atual (prefix ajuda a visualizar hierarquia no select)
+      lista.push({
+        ...pasta,
+        nomePasta: prefix + pasta.nomePasta,
+      });
+
+      // se tiver subpastas, adiciona recursivamente
+      if (pasta.subPastas && pasta.subPastas.length > 0) {
+        lista = lista.concat(
+          this.flattenPastas(pasta.subPastas, prefix + '— ')
+        );
+      }
+    }
+
+    return lista;
+  }
+
+  // 🔹 Helper opcional para coletar arquivos em toda árvore
+  private coletarArquivosRecursivo(pastas: any[]): any[] {
+    let arquivos: any[] = [];
+    for (const pasta of pastas) {
+      if (pasta.arquivos && pasta.arquivos.length > 0) {
+        arquivos.push(...pasta.arquivos);
+      }
+      if (pasta.subPastas && pasta.subPastas.length > 0) {
+        arquivos.push(...this.coletarArquivosRecursivo(pasta.subPastas));
+      }
+    }
+
+    console.log('Arquivos encontrados:', arquivos);
+    return arquivos;
   }
 
   private carregarUsuarios(): void {

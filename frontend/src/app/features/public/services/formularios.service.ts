@@ -8,6 +8,7 @@ import {
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { Router } from '@angular/router';
+import { environment } from '../../../../environments/environment.prod';
 
 // ============================
 // DTOs Públicos
@@ -22,6 +23,7 @@ export interface PastaExplorerDTO {
 export interface PastaFormularioDTO {
   id: number;
   nomePasta: string;
+  caminhoCompleto: string;
   quantidadeArquivos: number;
   tamanhoTotal: number;
 }
@@ -29,6 +31,7 @@ export interface PastaFormularioDTO {
 export interface FormularioDTO {
   id: number;
   nomeArquivo: string;
+  caminhoArmazenamento?: string;
   tamanho: number;
   dataUpload: string;
 }
@@ -36,6 +39,8 @@ export interface FormularioDTO {
 export interface UploadFormularioResponse {
   id: number;
   nomeArquivo: string;
+  pastaId: number;
+  nomePasta: string;
   tamanho: number;
   dataUpload: string;
 }
@@ -51,8 +56,11 @@ export interface ErrorMessage {
 
 @Injectable({ providedIn: 'root' })
 export class FormulariosService {
-  private readonly apiUrlPublic = 'http://localhost:8082/api/public';
-  private readonly apiUrlAdmin = 'http://localhost:8082/api/admin';
+  //private readonly apiUrlPublic = 'http://localhost:8082/api/public';
+  //private readonly apiUrlAdmin = 'http://localhost:8082/api/admin';
+
+  private readonly apiUrlPublic = `${environment.apiUrl}/public`;
+  private readonly apiUrlAdmin = `${environment.apiUrl}/admin`;
 
   constructor(private http: HttpClient, private router: Router) {}
 
@@ -69,7 +77,6 @@ export class FormulariosService {
       .get<PastaExplorerDTO[]>(`${this.apiUrlPublic}/explorer`, { params })
       .pipe(catchError(this.tratarErro));
   }
-  
 
   listarPastasPublicas(): Observable<PastaFormularioDTO[]> {
     return this.http
@@ -91,7 +98,6 @@ export class FormulariosService {
       )
       .pipe(catchError(this.tratarErro));
   }
-  
 
   downloadFormulario(
     id: number,
@@ -132,12 +138,14 @@ export class FormulariosService {
     novoNome: string
   ): Observable<FormularioDTO> {
     return this.http
-      .put<FormularioDTO>(`${this.apiUrlAdmin}/formularios/${formularioId}/renomear`, {
-        novoNome,
-      })
+      .put<FormularioDTO>(
+        `${this.apiUrlAdmin}/formularios/${formularioId}/renomear`,
+        {
+          novoNome,
+        }
+      )
       .pipe(catchError(this.tratarErro));
   }
-  
 
   excluirPasta(pastaId: number): Observable<void> {
     return this.http
@@ -205,19 +213,32 @@ export class FormulariosService {
   // ⚠️ Tratamento centralizado de erros
   // ===============================
   private tratarErro(error: HttpErrorResponse) {
-    console.error('Erro capturado no FormulariosService:', error);
-
+    console.error('Erro capturado no AdminService:', error);
+  
+    // ✅ Caso especial para uploads muito grandes
+    if (error.status === 413) {
+      const erroBackend: ErrorMessage = {
+        status: 413,
+        error: 'Arquivo muito grande',
+        message: 'O arquivo enviado excede o limite permitido pelo servidor.',
+        path: error.url || '',
+        timestamp: new Date().toISOString(),
+      };
+      return throwError(() => erroBackend);
+    }
+  
+    // 🔹 Demais casos (fallback)
     const erroBackend: ErrorMessage = {
       status: error.status,
       error: error.error?.error || 'Erro desconhecido',
       message: error.error?.message || 'Erro ao processar requisição',
-      path: error.error?.path || '',
+      path: error.error?.path || error.url || '',
       timestamp: error.error?.timestamp || new Date().toISOString(),
     };
-
+  
     return throwError(() => erroBackend);
   }
-
+  
   // ===============================
   // 📐 Utilitário para exibir tamanho legível
   // ===============================

@@ -1,6 +1,33 @@
 package br.com.carro.services;
 
-import br.com.carro.entities.DTO.formularios.*;
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.nio.file.AccessDeniedException;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
+
+import br.com.carro.entities.DTO.formularios.CriarPastaFormularioRequest;
+import br.com.carro.entities.DTO.formularios.ExplorerFilterRequest;
+import br.com.carro.entities.DTO.formularios.FormularioDTO;
+import br.com.carro.entities.DTO.formularios.PastaExplorerDTO;
+import br.com.carro.entities.DTO.formularios.PastaFormularioDTO;
+import br.com.carro.entities.DTO.formularios.UploadFormularioResponse;
 import br.com.carro.entities.Formulario;
 import br.com.carro.entities.PastaFormulario;
 import br.com.carro.entities.Usuario.Usuario;
@@ -10,26 +37,6 @@ import br.com.carro.utils.ArquivoUtils;
 import br.com.carro.utils.AuthService;
 import br.com.carro.utils.FileUtils;
 import jakarta.persistence.EntityNotFoundException;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
-import org.springframework.security.core.Authentication;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.io.File;
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.nio.file.*;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.stream.Stream;
 
 @Service
 public class FormularioService {
@@ -183,6 +190,51 @@ public class FormularioService {
         return pastaFormularioRepository.save(pasta);
     }
 
+    // RF-019: Renomear formulário
+    @Transactional
+    public Formulario renomearFormulario(Long formularioId, String novoNome) throws AccessDeniedException {
+        Formulario formulario = formularioRepository.findById(formularioId)
+                .orElseThrow(() -> new EntityNotFoundException("Formulário não encontrado."));
+
+        Path arquivoAtual = Paths.get(formulario.getCaminhoArmazenamento());
+
+        if (!Files.exists(arquivoAtual)) {
+            throw new IllegalStateException("O arquivo físico não existe: " + arquivoAtual);
+        }
+
+        // Extrai extensão original
+        String extensao = "";
+        String nomeArquivo = formulario.getNomeArquivo();
+        int i = nomeArquivo.lastIndexOf('.');
+        if (i >= 0 && i < nomeArquivo.length() - 1) {
+            extensao = nomeArquivo.substring(i); // inclui o ponto
+        }
+
+        // Novo caminho
+        Path novoCaminho = Paths.get(
+                formulario.getPastaFormulario().getCaminhoCompleto(),
+                FileUtils.sanitizeFileName(novoNome) + extensao
+        );
+
+        if (Files.exists(novoCaminho)) {
+            throw new IllegalArgumentException("Já existe um formulário com este nome nesta pasta.");
+        }
+
+        try {
+            Files.move(arquivoAtual, novoCaminho);
+        } catch (IOException e) {
+            throw new RuntimeException("Erro ao renomear o formulário no sistema de arquivos: "
+                    + arquivoAtual + " -> " + novoCaminho, e);
+        }
+
+        formulario.setNomeArquivo(FileUtils.sanitizeFileName(novoNome) + extensao);
+        formulario.setCaminhoArmazenamento(novoCaminho.toString());
+        formulario.setDataAtualizacao(LocalDateTime.now());
+
+        return formularioRepository.save(formulario);
+    }
+
+
 
 
 
@@ -219,7 +271,7 @@ public class FormularioService {
     }
 
 
-    @Transactional
+     @Transactional
     public UploadFormularioResponse uploadFormulario(Long pastaId,
                                                      MultipartFile file,
                                                      Authentication authentication)
@@ -232,16 +284,15 @@ public class FormularioService {
         PastaFormulario pasta = pastaFormularioRepository.findById(pastaId)
                 .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com ID: " + pastaId));
 
-        // ✅ Permissões: apenas ADMIN ou GERENTE podem subir arquivos
         Usuario usuario = authService.getUsuarioLogado(authentication);
 
-        // 🚨 Garante que o diretório existe
+        // 🚨 Diretório físico da pasta
         Path destino = Paths.get(pasta.getCaminhoCompleto());
         if (!Files.exists(destino)) {
             throw new IllegalStateException("O diretório da pasta não existe no filesystem: " + destino);
         }
 
-        // 📂 Salvar arquivo físico
+        // 📂 Caminho do arquivo
         Path caminhoArquivo = destino.resolve(FileUtils.sanitizeFileName(file.getOriginalFilename()));
 
         try {
@@ -255,10 +306,11 @@ public class FormularioService {
         // 💾 Salvar no banco
         Formulario formulario = new Formulario();
         formulario.setNomeArquivo(file.getOriginalFilename());
-        formulario.setCaminhoArmazenamento(destino.toString());
+        formulario.setCaminhoArmazenamento(caminhoArquivo.toString()); // ✅ CAMINHO DO ARQUIVO COMPLETO
         formulario.setTamanho(file.getSize());
         formulario.setPastaFormulario(pasta);
         formulario.setDataUpload(LocalDateTime.now());
+        formulario.setDataAtualizacao(LocalDateTime.now());
         formulario.setCriadoPor(usuario);
 
         formularioRepository.save(formulario);
@@ -286,7 +338,6 @@ public class FormularioService {
         PastaFormulario pasta = pastaFormularioRepository.findById(pastaId)
                 .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com ID: " + pastaId));
 
-        // 🚨 Garante que o diretório existe
         Path destino = Paths.get(pasta.getCaminhoCompleto());
         if (!Files.exists(destino)) {
             throw new IllegalStateException("O diretório da pasta não existe no filesystem: " + destino);
@@ -313,10 +364,11 @@ public class FormularioService {
             // 💾 Salvar no banco
             Formulario formulario = new Formulario();
             formulario.setNomeArquivo(file.getOriginalFilename());
-            formulario.setCaminhoArmazenamento(destino.toString());
+            formulario.setCaminhoArmazenamento(caminhoArquivo.toString()); // ✅ CAMINHO DO ARQUIVO COMPLETO
             formulario.setTamanho(file.getSize());
             formulario.setPastaFormulario(pasta);
             formulario.setDataUpload(LocalDateTime.now());
+            formulario.setDataAtualizacao(LocalDateTime.now());
             formulario.setCriadoPor(usuario);
 
             formularioRepository.save(formulario);
@@ -337,52 +389,56 @@ public class FormularioService {
 
     @Transactional
     public UploadFormularioResponse substituirFormulario(Long formularioId,
-                                                         MultipartFile novoArquivo) throws IOException {
+                                                         MultipartFile novoArquivo) throws AccessDeniedException {
         if (novoArquivo == null || novoArquivo.isEmpty()) {
-            throw new IllegalArgumentException("O novo arquivo não pode ser vazio.");
+            throw new IllegalArgumentException("O arquivo enviado não pode ser vazio.");
         }
 
         Formulario formulario = formularioRepository.findById(formularioId)
                 .orElseThrow(() -> new EntityNotFoundException("Formulário não encontrado com ID: " + formularioId));
 
         PastaFormulario pasta = formulario.getPastaFormulario();
-        if (pasta == null) {
-            throw new IllegalStateException("O formulário não está vinculado a nenhuma pasta.");
+        Path destino = Paths.get(pasta.getCaminhoCompleto());
+
+        if (!Files.exists(destino)) {
+            throw new IllegalStateException("O diretório da pasta não existe no filesystem: " + destino);
         }
 
-        // 🚨 Garante que a pasta existe no filesystem
-        Path pastaDestino = Paths.get(pasta.getCaminhoCompleto());
-        if (!Files.exists(pastaDestino)) {
-            throw new IllegalStateException("O diretório da pasta não existe no filesystem: " + pastaDestino);
-        }
+        // 🔄 Caminho antigo (arquivo a ser substituído)
+        Path caminhoAntigo = Paths.get(formulario.getCaminhoArmazenamento());
 
-        // 📂 Substituir arquivo físico
-        Path caminhoArquivo = pastaDestino.resolve(FileUtils.sanitizeFileName(novoArquivo.getOriginalFilename()));
+        // 📂 Caminho novo (mesmo nome enviado ou atualizado)
+        Path caminhoNovo = destino.resolve(FileUtils.sanitizeFileName(novoArquivo.getOriginalFilename()));
 
         try {
-            // Sobrescreve o arquivo existente
-            Files.copy(novoArquivo.getInputStream(), caminhoArquivo, StandardCopyOption.REPLACE_EXISTING);
+            // Exclui o arquivo antigo, se ainda existir
+            if (Files.exists(caminhoAntigo)) {
+                Files.delete(caminhoAntigo);
+            }
+
+            // Salva o novo arquivo
+            Files.copy(novoArquivo.getInputStream(), caminhoNovo);
         } catch (IOException e) {
-            throw new RuntimeException("Erro ao substituir o arquivo no sistema de arquivos.", e);
+            throw new RuntimeException("Erro ao substituir o formulário no sistema de arquivos.", e);
         }
 
-        // 💾 Atualizar informações do formulário no banco
+        // 🔄 Atualiza os metadados no banco
         formulario.setNomeArquivo(novoArquivo.getOriginalFilename());
+        formulario.setCaminhoArmazenamento(caminhoNovo.toString()); // ✅ CAMINHO DO ARQUIVO COMPLETO
         formulario.setTamanho(novoArquivo.getSize());
-        formulario.setDataUpload(LocalDateTime.now());
+        formulario.setDataAtualizacao(LocalDateTime.now());
 
-        Formulario salvo = formularioRepository.save(formulario);
+        formularioRepository.save(formulario);
 
         return new UploadFormularioResponse(
-                salvo.getId(),
-                salvo.getNomeArquivo(),
-                salvo.getTamanho(),
+                formulario.getId(),
+                formulario.getNomeArquivo(),
+                formulario.getTamanho(),
                 pasta.getId(),
                 pasta.getNomePasta(),
                 "Formulário substituído com sucesso."
         );
     }
-
 
 
     @Transactional

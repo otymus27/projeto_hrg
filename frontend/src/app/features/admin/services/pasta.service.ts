@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../../environments/environment.prod';
 
 export interface Pasta {
   id: number;
@@ -11,7 +12,9 @@ export interface Pasta {
 @Injectable({ providedIn: 'root' })
 export class PastaService {
   // private readonly apiUrl = '/api/pastas';
-  private apiUrl = 'http://localhost:8082/api/pastas';
+  // private apiUrl = 'http://localhost:8082/api/pastas';
+
+  private apiUrl = `${environment.apiUrl}/pastas`;
 
   constructor(private http: HttpClient) {}
 
@@ -22,7 +25,7 @@ export class PastaService {
   listarSubPastas(idPasta: number): Observable<Pasta[]> {
     return this.http.get<Pasta[]>(`${this.apiUrl}/${idPasta}/subpastas`);
   }
-  
+
   criarPasta(nomePasta: string, pastaPaiId?: number): Observable<Pasta> {
     return this.http.post<Pasta>(this.apiUrl, { nomePasta, pastaPaiId });
   }
@@ -32,7 +35,9 @@ export class PastaService {
   }
 
   renomearPasta(id: number, novoNome: string): Observable<Pasta> {
-    return this.http.patch<Pasta>(`${this.apiUrl}/${id}/renomear`, { novoNome });
+    return this.http.patch<Pasta>(`${this.apiUrl}/${id}/renomear`, {
+      novoNome,
+    });
   }
 
   moverPasta(id: number, novaPastaPaiId?: number): Observable<Pasta> {
@@ -45,13 +50,19 @@ export class PastaService {
     return this.http.post<Pasta>(`${this.apiUrl}/${id}/copiar${params}`, {});
   }
 
-  excluirPastasEmLote(idsPastas: number[], excluirConteudo = false): Observable<void> {
+  excluirPastasEmLote(
+    idsPastas: number[],
+    excluirConteudo = false
+  ): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/excluir-lote`, {
-      body: { idsPastas, excluirConteudo }
+      body: { idsPastas, excluirConteudo },
     });
   }
 
   substituirPasta(idDestino: number, idOrigem: number): Observable<Pasta> {
-    return this.http.put<Pasta>(`${this.apiUrl}/${idDestino}/substituir/${idOrigem}`, {});
+    return this.http.put<Pasta>(
+      `${this.apiUrl}/${idDestino}/substituir/${idOrigem}`,
+      {}
+    );
   }
 }

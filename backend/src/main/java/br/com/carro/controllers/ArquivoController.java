@@ -1,8 +1,41 @@
 package br.com.carro.controllers;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.file.AccessDeniedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
 import br.com.carro.entities.Arquivo;
-import br.com.carro.entities.Pasta;
 import br.com.carro.entities.DTO.ArquivoDTO;
+import br.com.carro.entities.Pasta;
 import br.com.carro.entities.Usuario.Usuario;
 import br.com.carro.exceptions.ArquivoNaoEncontradoException;
 import br.com.carro.exceptions.ErrorMessage;
@@ -13,24 +46,6 @@ import br.com.carro.services.ArquivoService;
 import br.com.carro.utils.AuthService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.core.io.InputStreamResource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.io.*;
-import java.nio.file.*;
-import java.util.List;
-import java.util.Map;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 @RestController
 @RequestMapping("/api/arquivos")
@@ -190,7 +205,7 @@ public class ArquivoController {
     }
 
     // ✅ ENDPOINT 05 - Renomear arquivo
-    @PutMapping("/renomear/{arquivoId}")
+    @PatchMapping("/renomear/{arquivoId}")
     @PreAuthorize("hasAnyRole('ADMIN','GERENTE')")
     public ResponseEntity<?> renomearArquivo(@PathVariable Long arquivoId,
                                              @RequestBody Map<String, String> requestBody,

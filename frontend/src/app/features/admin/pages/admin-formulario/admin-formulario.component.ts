@@ -203,31 +203,32 @@ export class AdminFormularioComponent implements OnInit {
   }
 
   // Chama função no service para renomear arquivo ou pasta
-  renomearItem(): void {
-    if (!this.itemParaRenomear || !this.novoNomeItem) return;
+renomearItem(): void {
+  if (!this.itemParaRenomear || !this.novoNomeItem) return;
 
-    const request: Observable<any> = this.isPasta(this.itemParaRenomear)
-      ? this.formulariosService.renomearPasta(
-          this.itemParaRenomear.id,
-          this.novoNomeItem
-        )
-      : this.formulariosService.substituirFormulario(
-          this.itemParaRenomear.id,
-          new File([], this.novoNomeItem) // placeholder
-        );
+  const request: Observable<any> = this.isPasta(this.itemParaRenomear)
+    ? this.formulariosService.renomearPasta(
+        this.itemParaRenomear.id,
+        this.novoNomeItem
+      )
+    : this.formulariosService.renomearFormulario(
+        this.itemParaRenomear.id,
+        this.novoNomeItem // 🔑 passa só o novo nome, não cria `File`
+      );
 
-    request.subscribe({
-      next: () => {
-        this.toastService.showSuccess('Nome alterado com sucesso!');
-        this.fecharModalRenomear();
-        this.recarregarAtual(); // ✅ agora recarrega corretamente
-      },
-      error: (err) => {
-        this.handleError('Erro ao renomear item', err);
-        this.fecharModalRenomear();
-      },
-    });
-  }
+  request.subscribe({
+    next: () => {
+      this.toastService.showSuccess('Nome alterado com sucesso!');
+      this.fecharModalRenomear();
+      this.recarregarAtual();
+    },
+    error: (err) => {
+      this.handleError('Erro ao renomear item', err);
+      this.fecharModalRenomear();
+    },
+  });
+}
+
 
   // ---------------- Upload ----------------
   abrirModalUpload(): void {

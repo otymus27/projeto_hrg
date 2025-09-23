@@ -1,6 +1,7 @@
 package br.com.carro.controllers;
 
 import br.com.carro.entities.DTO.formularios.CriarPastaFormularioRequest;
+import br.com.carro.entities.DTO.formularios.FormularioDTO;
 import br.com.carro.entities.DTO.formularios.PastaFormularioDTO;
 import br.com.carro.entities.DTO.formularios.UploadFormularioResponse;
 import br.com.carro.entities.Formulario;
@@ -342,17 +343,18 @@ public class FormularioAdminController {
         }
     }
 
-    // 🔄 Substituir formulário existente
+    // 🔄 ENDPOINT - Substituir formulário existente
     @PutMapping("/formularios/{formularioId}/substituir")
-    public ResponseEntity<?> substituir(@PathVariable Long formularioId,
-                                        @RequestParam("file") MultipartFile novoArquivo,
-                                        HttpServletRequest httpRequest) {
+    public ResponseEntity<?> substituirFormulario(@PathVariable Long formularioId,
+                                                  @RequestParam("file") MultipartFile novoArquivo,
+                                                  HttpServletRequest httpRequest) {
+
         if (novoArquivo == null || novoArquivo.isEmpty()) {
             return ResponseEntity.badRequest()
                     .body(new ErrorMessage(
                             HttpStatus.BAD_REQUEST.value(),
                             "Arquivo obrigatório",
-                            "O novo arquivo não pode ser vazio",
+                            "O arquivo enviado não pode ser vazio",
                             httpRequest.getRequestURI()
                     ));
         }
@@ -379,12 +381,12 @@ public class FormularioAdminController {
                             httpRequest.getRequestURI()
                     ));
 
-        } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new ErrorMessage(
-                            HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                            "Erro de I/O",
-                            "Falha ao substituir o arquivo: " + e.getMessage(),
+                            HttpStatus.FORBIDDEN.value(),
+                            "Acesso negado",
+                            e.getMessage(),
                             httpRequest.getRequestURI()
                     ));
 
@@ -392,12 +394,13 @@ public class FormularioAdminController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ErrorMessage(
                             HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                            "Erro inesperado",
+                            "Erro ao substituir formulário",
                             e.getMessage(),
                             httpRequest.getRequestURI()
                     ));
         }
     }
+
 
     // ❌ Excluir formulário
     @DeleteMapping("/formularios/{formularioId}")
@@ -445,6 +448,68 @@ public class FormularioAdminController {
                     ));
         }
     }
+
+    // ✅ ENDPOINT - Renomear formulário
+    @PutMapping("/formularios/{formularioId}/renomear")
+    public ResponseEntity<?> renomearFormulario(@PathVariable Long formularioId,
+                                                @RequestBody Map<String, String> requestBody,
+                                                HttpServletRequest httpRequest) {
+
+        String novoNome = requestBody.get("novoNome");
+        if (novoNome == null || novoNome.trim().isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(new ErrorMessage(
+                            HttpStatus.BAD_REQUEST.value(),
+                            "Campo obrigatório",
+                            "O novo nome não pode ser vazio",
+                            httpRequest.getRequestURI()
+                    ));
+        }
+
+        try {
+            Formulario formularioRenomeado = service.renomearFormulario(formularioId, novoNome);
+            FormularioDTO dto = FormularioDTO.fromEntity(formularioRenomeado);
+
+            return ResponseEntity.ok(dto);
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ErrorMessage(
+                            HttpStatus.NOT_FOUND.value(),
+                            "Formulário não encontrado",
+                            e.getMessage(),
+                            httpRequest.getRequestURI()
+                    ));
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(new ErrorMessage(
+                            HttpStatus.BAD_REQUEST.value(),
+                            "Nome inválido",
+                            e.getMessage(),
+                            httpRequest.getRequestURI()
+                    ));
+
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new ErrorMessage(
+                            HttpStatus.FORBIDDEN.value(),
+                            "Acesso negado",
+                            e.getMessage(),
+                            httpRequest.getRequestURI()
+                    ));
+
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorMessage(
+                            HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                            "Erro ao renomear formulário",
+                            e.getMessage(),
+                            httpRequest.getRequestURI()
+                    ));
+        }
+    }
+
 
     // ❌ Excluir varios formulários de uma vez
     @DeleteMapping("/formularios/excluir-lote")

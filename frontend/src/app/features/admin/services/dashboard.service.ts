@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
+import { environment } from '../../../../environments/environment.prod';
 
 export interface MetricData {
   label: string;
@@ -41,7 +42,9 @@ interface RawDashboardData {
   providedIn: 'root',
 })
 export class DashboardService {
-  private apiUrl = 'http://localhost:8082/api/estatisticas';
+  // private apiUrl = 'http://localhost:8082/api/estatisticas';
+
+  private apiUrl = `${environment.apiUrl}/estatisticas`;
 
   constructor(private http: HttpClient) {}
 

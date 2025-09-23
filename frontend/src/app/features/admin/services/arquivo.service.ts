@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../../environments/environment.prod';
 
 export interface Arquivo {
   id: number;
@@ -14,7 +15,8 @@ export interface Arquivo {
 @Injectable({ providedIn: 'root' })
 export class ArquivoService {
   // private readonly apiUrl = '/api/arquivos';
-  private apiUrl = 'http://localhost:8082/api/arquivos';
+  // private apiUrl = 'http://localhost:8082/api/arquivos';
+  private apiUrl = `${environment.apiUrl}/arquivos`;
 
   constructor(private http: HttpClient) {}
 
@@ -27,8 +29,11 @@ export class ArquivoService {
 
   uploadMultiplos(arquivos: File[], pastaId: number): Observable<Arquivo[]> {
     const formData = new FormData();
-    arquivos.forEach(file => formData.append('arquivos', file));
-    return this.http.post<Arquivo[]>(`${this.apiUrl}/pasta/${pastaId}/upload-multiplos`, formData);
+    arquivos.forEach((file) => formData.append('arquivos', file));
+    return this.http.post<Arquivo[]>(
+      `${this.apiUrl}/pasta/${pastaId}/upload-multiplos`,
+      formData
+    );
   }
 
   excluir(id: number): Observable<void> {
@@ -37,26 +42,37 @@ export class ArquivoService {
 
   excluirVarios(pastaId: number, arquivoIds?: number[]): Observable<any> {
     return this.http.delete(`${this.apiUrl}/pasta/${pastaId}/excluir`, {
-      body: arquivoIds || []
+      body: arquivoIds || [],
     });
   }
 
   mover(arquivoId: number, pastaDestinoId: number): Observable<Arquivo> {
-    return this.http.put<Arquivo>(`${this.apiUrl}/${arquivoId}/mover/${pastaDestinoId}`, {});
+    return this.http.put<Arquivo>(
+      `${this.apiUrl}/${arquivoId}/mover/${pastaDestinoId}`,
+      {}
+    );
   }
 
   copiar(arquivoId: number, pastaDestinoId: number): Observable<Arquivo> {
-    return this.http.post<Arquivo>(`${this.apiUrl}/${arquivoId}/copiar/${pastaDestinoId}`, {});
+    return this.http.post<Arquivo>(
+      `${this.apiUrl}/${arquivoId}/copiar/${pastaDestinoId}`,
+      {}
+    );
   }
 
   renomear(arquivoId: number, novoNome: string): Observable<Arquivo> {
-    return this.http.put<Arquivo>(`${this.apiUrl}/renomear/${arquivoId}`, { novoNome });
+    return this.http.put<Arquivo>(`${this.apiUrl}/renomear/${arquivoId}`, {
+      novoNome,
+    });
   }
 
   substituir(arquivoId: number, arquivo: File): Observable<Arquivo> {
     const formData = new FormData();
     formData.append('arquivo', arquivo);
-    return this.http.post<Arquivo>(`${this.apiUrl}/${arquivoId}/substituir`, formData);
+    return this.http.post<Arquivo>(
+      `${this.apiUrl}/${arquivoId}/substituir`,
+      formData
+    );
   }
 
   listarPorPasta(
@@ -79,13 +95,13 @@ export class ArquivoService {
 
   downloadArquivo(arquivoId: number): Observable<Blob> {
     return this.http.get(`${this.apiUrl}/download/arquivo/${arquivoId}`, {
-      responseType: 'blob'
+      responseType: 'blob',
     });
   }
 
   downloadPasta(pastaId: number): Observable<Blob> {
     return this.http.get(`${this.apiUrl}/download/pasta/${pastaId}`, {
-      responseType: 'blob'
+      responseType: 'blob',
     });
   }
 }

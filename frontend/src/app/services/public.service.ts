@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment.prod';
 
 export interface PastaPublica {
   id: number;
@@ -33,7 +34,9 @@ export interface ArquivoPublico {
 
 @Injectable({ providedIn: 'root' })
 export class PublicService {
-  private apiUrl = 'http://localhost:8082/api/publico';
+  // private apiUrl = 'http://localhost:8082/api/publico';
+
+  private readonly apiUrl = `${environment.apiUrl}/publico`;
 
   constructor(private http: HttpClient) {}
 
@@ -60,7 +63,6 @@ export class PublicService {
   getPastaFarmacia(): Observable<PastaPublicaDTO> {
     return this.http.get<PastaPublicaDTO>(`${this.apiUrl}/farmacia`);
   }
-  
 
   visualizarArquivo(arquivoId: number): Observable<Blob> {
     return this.http.get(`${this.apiUrl}/visualizar/arquivo/${arquivoId}`, {
