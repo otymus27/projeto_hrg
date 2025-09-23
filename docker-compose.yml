@@ -44,7 +44,7 @@ services:
     build: ./frontend
     container_name: frontend-portal
     ports:
-      - "85:80"
+      - "86:80"
     depends_on:
       - api
     networks:
