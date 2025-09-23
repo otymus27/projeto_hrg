@@ -58,6 +58,9 @@ export class FarmaciaExplorerPublicoComponent implements OnInit {
       const url = window.URL.createObjectURL(blob);
       window.open(url, '_blank');
     });
+
+    // Fecha o modal após abrir o arquivo
+    this.fecharModal();
   }
 
   formatarTamanho(bytes: number): string {

@@ -623,7 +623,7 @@ abrirPasta(pasta: PastaCompletaDTO, adicionarBreadcrumb = true): void {
       if (this.modalAtivo === 'criarPasta') {
         this.usuariosSelecionados.push(usuario);
       } else if (this.modalAtivo === 'permissao') {
-        this.usuariosComPermissao.push({ id: usuario.id, username: usuario.username });
+        this.usuariosComPermissao.push({ id: usuario.id, username: usuario.username, nome:usuario.nome });
         this.atualizarListaDeDisponiveis();
       }
     }

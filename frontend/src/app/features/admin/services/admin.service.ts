@@ -73,6 +73,7 @@ export interface PastaPermissaoAcaoDTO {
 export interface UsuarioResumoDTO {
   id: number;
   username: string;
+  nome: string;
 }
 
 export interface ErrorMessage {
@@ -108,7 +109,9 @@ export class AdminService {
     }
 
     return this.http
-      .get<PastaCompletaDTO[]>(`${this.apiUrlAdminPastas}/subpastas`, { params })
+      .get<PastaCompletaDTO[]>(`${this.apiUrlAdminPastas}/subpastas`, {
+        params,
+      })
       .pipe(catchError(this.tratarErro));
   }
 
@@ -118,7 +121,7 @@ export class AdminService {
     ordemAsc: boolean = true,
     nomeBusca?: string
   ): Observable<PastaCompletaDTO> {
-      let params = new HttpParams()
+    let params = new HttpParams()
       .set('ordenarPor', ordenarPor)
       .set('ordemAsc', ordemAsc.toString());
 
@@ -149,7 +152,9 @@ export class AdminService {
 
   renomearPasta(id: number, novoNome: string): Observable<PastaCompletaDTO> {
     return this.http
-      .patch<PastaCompletaDTO>(`${this.apiUrlAdminPastas}/${id}/renomear`, { novoNome })
+      .patch<PastaCompletaDTO>(`${this.apiUrlAdminPastas}/${id}/renomear`, {
+        novoNome,
+      })
       .pipe(catchError(this.tratarErro));
   }
 
@@ -159,25 +164,39 @@ export class AdminService {
       .pipe(catchError(this.tratarErro));
   }
 
-  copiarPasta(id: number, destinoPastaId?: number): Observable<PastaCompletaDTO> {
+  copiarPasta(
+    id: number,
+    destinoPastaId?: number
+  ): Observable<PastaCompletaDTO> {
     let params = new HttpParams();
     if (destinoPastaId !== undefined) {
       params = params.set('destinoPastaId', String(destinoPastaId));
     }
 
     return this.http
-      .post<PastaCompletaDTO>(`${this.apiUrlAdminPastas}/${id}/copiar`, {}, { params }) // ✅ body {}
+      .post<PastaCompletaDTO>(
+        `${this.apiUrlAdminPastas}/${id}/copiar`,
+        {},
+        { params }
+      ) // ✅ body {}
       .pipe(catchError(this.tratarErro));
   }
 
-  moverPasta(idPasta: number, novaPastaPaiId?: number): Observable<PastaCompletaDTO> {
+  moverPasta(
+    idPasta: number,
+    novaPastaPaiId?: number
+  ): Observable<PastaCompletaDTO> {
     let params = new HttpParams();
     if (novaPastaPaiId !== undefined) {
       params = params.set('novaPastaPaiId', String(novaPastaPaiId));
     }
 
     return this.http
-      .patch<PastaCompletaDTO>(`${this.apiUrlAdminPastas}/${idPasta}/mover`, {}, { params }) // ✅ body {}
+      .patch<PastaCompletaDTO>(
+        `${this.apiUrlAdminPastas}/${idPasta}/mover`,
+        {},
+        { params }
+      ) // ✅ body {}
       .pipe(catchError(this.tratarErro));
   }
 
@@ -207,12 +226,18 @@ export class AdminService {
       .pipe(catchError(this.tratarErro));
   }
 
-  uploadMultiplosArquivos(files: File[], pastaId: number): Observable<ArquivoAdmin[]> {
+  uploadMultiplosArquivos(
+    files: File[],
+    pastaId: number
+  ): Observable<ArquivoAdmin[]> {
     const formData = new FormData();
     files.forEach((file) => formData.append('arquivos', file));
 
     return this.http
-      .post<ArquivoAdmin[]>(`${this.apiUrlAdminArquivos}/pasta/${pastaId}/upload-multiplos`, formData)
+      .post<ArquivoAdmin[]>(
+        `${this.apiUrlAdminArquivos}/pasta/${pastaId}/upload-multiplos`,
+        formData
+      )
       .pipe(catchError(this.tratarErro));
   }
 
@@ -224,19 +249,33 @@ export class AdminService {
 
   renomearArquivo(id: number, novoNome: string): Observable<ArquivoAdmin> {
     return this.http
-      .patch<ArquivoAdmin>(`${this.apiUrlAdminArquivos}/renomear/${id}`, { novoNome })
+      .patch<ArquivoAdmin>(`${this.apiUrlAdminArquivos}/renomear/${id}`, {
+        novoNome,
+      })
       .pipe(catchError(this.tratarErro));
   }
 
-  copiarArquivo(arquivoId: number, pastaDestinoId: number): Observable<ArquivoAdmin> {
+  copiarArquivo(
+    arquivoId: number,
+    pastaDestinoId: number
+  ): Observable<ArquivoAdmin> {
     return this.http
-      .post<ArquivoAdmin>(`${this.apiUrlAdminArquivos}/${arquivoId}/copiar/${pastaDestinoId}`, {}) // ✅ body {}
+      .post<ArquivoAdmin>(
+        `${this.apiUrlAdminArquivos}/${arquivoId}/copiar/${pastaDestinoId}`,
+        {}
+      ) // ✅ body {}
       .pipe(catchError(this.tratarErro));
   }
 
-  moverArquivo(arquivoId: number, pastaDestinoId: number): Observable<ArquivoAdmin> {
+  moverArquivo(
+    arquivoId: number,
+    pastaDestinoId: number
+  ): Observable<ArquivoAdmin> {
     return this.http
-      .put<ArquivoAdmin>(`${this.apiUrlAdminArquivos}/${arquivoId}/mover/${pastaDestinoId}`, {}) // ✅ body {}
+      .put<ArquivoAdmin>(
+        `${this.apiUrlAdminArquivos}/${arquivoId}/mover/${pastaDestinoId}`,
+        {}
+      ) // ✅ body {}
       .pipe(catchError(this.tratarErro));
   }
 
@@ -248,7 +287,7 @@ export class AdminService {
   }
 
   listarUsuarios(
-    username?: string,
+    termoBusca?: string | null,
     page: number = 0,
     size: number = 10
   ): Observable<Paginacao<Usuario>> {
@@ -256,8 +295,15 @@ export class AdminService {
       .set('page', page.toString())
       .set('size', size.toString());
 
-    if (username) {
-      params = params.set('username', username);
+    if (termoBusca) {
+      // 🔎 Decide se busca por username ou nome
+      if (/^\d+$/.test(termoBusca) || termoBusca.includes('@')) {
+        // se for número (login numérico) ou email → username
+        params = params.set('username', termoBusca);
+      } else {
+        // caso contrário → nome
+        params = params.set('nome', termoBusca);
+      }
     }
 
     return this.http

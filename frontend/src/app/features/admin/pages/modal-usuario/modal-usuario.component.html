@@ -25,10 +25,13 @@
           class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
           (click)="adicionarUsuario(u)"
         >
-          {{ u.username }}
+          {{ u.username }} - {{ u.nome }}
           <i class="bi bi-plus-circle-fill text-success"></i>
         </a>
-        <div *ngIf="usuariosDisponiveis.length === 0" class="text-muted text-center p-3">
+        <div
+          *ngIf="usuariosDisponiveis.length === 0"
+          class="text-muted text-center p-3"
+        >
           Nenhum usuário encontrado.
         </div>
       </div>

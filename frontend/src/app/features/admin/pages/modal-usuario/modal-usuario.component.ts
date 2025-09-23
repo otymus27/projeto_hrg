@@ -1,5 +1,3 @@
-// src/app/admin/admin-explorer/modal-usuario/modal-usuario.component.ts
-
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
