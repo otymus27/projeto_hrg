@@ -1,7 +1,34 @@
 package br.com.carro.services;
 
+import java.io.IOException;
+import java.nio.file.AccessDeniedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import br.com.carro.entities.Arquivo;
-import br.com.carro.entities.DTO.*;
+import br.com.carro.entities.DTO.ArquivoDTO;
+import br.com.carro.entities.DTO.PastaCompletaDTO;
+import br.com.carro.entities.DTO.PastaFilterDTO;
+import br.com.carro.entities.DTO.PastaRequestDTO;
+import br.com.carro.entities.DTO.PastaUpdateDTO;
 import br.com.carro.entities.Pasta;
 import br.com.carro.entities.Usuario.Usuario;
 import br.com.carro.exceptions.ResourceNotFoundException;
@@ -11,17 +38,6 @@ import br.com.carro.repositories.UsuarioRepository;
 import br.com.carro.utils.AuthService;
 import br.com.carro.utils.FileUtils;
 import jakarta.persistence.EntityNotFoundException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import java.nio.file.*;
-import java.util.*;
-import java.io.IOException;
-import java.time.LocalDateTime;
-import java.util.stream.Collectors;
 
 @Service
 public class PastaService {
@@ -384,47 +400,51 @@ public class PastaService {
     }
 
 
-    @Transactional
-    public Pasta renomearPasta(Long pastaId, String novoNome, Usuario usuarioLogado) throws AccessDeniedException {
-        Pasta pasta = pastaRepository.findById(pastaId)
-                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada."));
+   @Transactional
+public Pasta renomearPasta(Long pastaId, String novoNome, Usuario usuarioLogado) throws AccessDeniedException {
+    Pasta pasta = pastaRepository.findById(pastaId)
+            .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada."));
 
-        boolean isAdmin = usuarioLogado.isAdmin();
-        boolean isGerente = usuarioLogado.getRoles().stream()
-                .anyMatch(r -> r.getNome().equalsIgnoreCase("GERENTE"));
+    boolean isAdmin = usuarioLogado.isAdmin();
+    boolean isGerente = usuarioLogado.getRoles().stream()
+            .anyMatch(r -> r.getNome().equalsIgnoreCase("GERENTE"));
 
-        // 🚫 Bloqueia GERENTE renomear pastas raiz
-        if (isGerente && pasta.getPastaPai() == null) {
-            throw new AccessDeniedException("GERENTE não pode renomear pastas raiz.");
-        }
-
-        // ✅ Permissão: ADMIN pode tudo, demais só se tiver permissão
-        if (!isAdmin && !pasta.getUsuariosComPermissao().contains(usuarioLogado)) {
-            throw new AccessDeniedException("Você não tem permissão para renomear esta pasta.");
-        }
-
-        // Verifica duplicidade no mesmo diretório
-        Path novoCaminho = Paths.get(
-                (pasta.getPastaPai() != null ? pasta.getPastaPai().getCaminhoCompleto() : rootDirectory),
-                FileUtils.sanitizeFileName(novoNome)
-        );
-
-        if (Files.exists(novoCaminho)) {
-            throw new IllegalArgumentException("Já existe uma pasta com este nome neste local.");
-        }
-
-        try {
-            Files.move(Paths.get(pasta.getCaminhoCompleto()), novoCaminho);
-        } catch (IOException e) {
-            throw new RuntimeException("Erro ao renomear a pasta no sistema de arquivos.", e);
-        }
-
-        pasta.setNomePasta(novoNome);
-        pasta.setCaminhoCompleto(novoCaminho.toString());
-        pasta.setDataAtualizacao(LocalDateTime.now());
-
-        return pastaRepository.save(pasta);
+    // 🚫 Bloqueia GERENTE renomear pastas raiz
+    if (isGerente && pasta.getPastaPai() == null) {
+        throw new AccessDeniedException("GERENTE não pode renomear pastas raiz.");
     }
+
+    // ✅ Permissão: ADMIN pode tudo, demais só se tiver permissão
+    if (!isAdmin && !pasta.getUsuariosComPermissao().contains(usuarioLogado)) {
+        throw new AccessDeniedException("Você não tem permissão para renomear esta pasta.");
+    }
+
+    Path pastaAtual = Paths.get(pasta.getCaminhoCompleto());
+
+    // Se tem pai → renomeia dentro do pai, senão usa root
+    Path pastaPai = (pasta.getPastaPai() != null)
+            ? Paths.get(pasta.getPastaPai().getCaminhoCompleto())
+            : Paths.get(rootDirectory);
+
+    Path novoCaminho = pastaPai.resolve(FileUtils.sanitizeFileName(novoNome));
+
+    if (Files.exists(novoCaminho)) {
+        throw new IllegalArgumentException("Já existe uma pasta com este nome neste local.");
+    }
+
+    try {
+        Files.move(pastaAtual, novoCaminho);
+    } catch (IOException e) {
+        throw new RuntimeException("Erro ao renomear a pasta no sistema de arquivos.", e);
+    }
+
+    pasta.setNomePasta(novoNome);
+    pasta.setCaminhoCompleto(novoCaminho.toString());
+    pasta.setDataAtualizacao(LocalDateTime.now());
+
+    return pastaRepository.save(pasta);
+}
+
 
 
     // ✅ ENDPOINT 06 - Service para atualizar campos da pasta raiz ou subpastas

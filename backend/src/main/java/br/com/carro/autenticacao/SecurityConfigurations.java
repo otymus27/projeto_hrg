@@ -93,6 +93,7 @@ public class SecurityConfigurations {
                 "http://localhost:4200",   // Angular dev
                 "http://localhost:86",     // Nginx local
                 "http://10.85.190.202:86", // Nginx na rede
+                "http://10.85.190.38:86", // Nginx na rede maquina linux
                 "http://10.85.190.202",    // acesso direto
                 "null"                     // file://
         ));
