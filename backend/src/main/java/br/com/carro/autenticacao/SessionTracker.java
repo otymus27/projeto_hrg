@@ -39,4 +39,8 @@ public class SessionTracker {
     public void resetarLoginsDoDia() {
         usuariosLogaramHoje.clear();
     }
+
+    public boolean isUsuarioAtivo(String username) {
+        return usuariosAtivos.contains(username);
+    }
 }

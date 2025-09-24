@@ -105,8 +105,10 @@ public class DashboardService {
         // USUÁRIOS (SessionTracker)      // ========================
 
 
-        long usuariosAtivosAgora = dashboardRepository.contarUsuariosAtivosAgora();
-        long usuariosLogaramHoje = dashboardRepository.contarUsuariosLogaramHoje();
+        long usuariosAtivosAgora = sessionTracker.getUsuariosAtivosAgora();
+        long usuariosLogaramHoje = sessionTracker.getUsuariosLogaramHoje();
+
+
 
         // ========================
         // RETORNA DTO FINAL

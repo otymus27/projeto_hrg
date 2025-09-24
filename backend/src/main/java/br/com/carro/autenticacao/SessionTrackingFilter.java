@@ -31,24 +31,21 @@ public class SessionTrackingFilter extends OncePerRequestFilter {
 
             if (authentication != null && authentication.isAuthenticated()) {
                 Object principal = authentication.getPrincipal();
+                String username = null;
 
                 // 🔑 Caso o principal seja um JWT (Spring Resource Server)
                 if (principal instanceof Jwt jwt) {
-                    String username = jwt.getSubject();
-
-                    // Verifica se o token está expirado
-                    Instant expiration = jwt.getExpiresAt();
-                    if (expiration != null && expiration.isBefore(Instant.now())) {
-                        sessionTracker.removerSessaoAtiva(username);
-                    } else {
-                        sessionTracker.registrarLogin(username);
-                    }
+                    username = jwt.getSubject();
                 }
                 // 🔑 Caso o principal seja UserDetails (ex: auth direta)
                 else if (principal instanceof org.springframework.security.core.userdetails.UserDetails userDetails) {
-                    String username = userDetails.getUsername();
+                    username = userDetails.getUsername();
+                }
+
+                if (username != null && !sessionTracker.isUsuarioAtivo(username)) {
                     sessionTracker.registrarLogin(username);
                 }
+
             }
         } catch (Exception e) {
             logger.error("Erro ao rastrear sessão do usuário", e);

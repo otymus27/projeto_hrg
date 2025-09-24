@@ -102,6 +102,6 @@ public interface DashboardRepository extends JpaRepository<Arquivo, Long> {
     long contarUsuariosLogaramHoje();
 
     // Usuários ativos agora (últimos 5 minutos, por exemplo)
-    @Query(value = "SELECT COUNT(DISTINCT username) FROM tb_login_audit WHERE data_login >= (NOW() - INTERVAL 5 MINUTE)", nativeQuery = true)
+    @Query(value = "SELECT COUNT(DISTINCT username) FROM tb_login_audit WHERE data_login >= (NOW())", nativeQuery = true)
     long contarUsuariosAtivosAgora();
 }

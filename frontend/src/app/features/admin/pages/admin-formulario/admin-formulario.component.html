@@ -211,6 +211,7 @@
     <input
       type="text"
       [(ngModel)]="novoNomePasta"
+      (input)="novoNomePasta = (novoNomePasta || '').toUpperCase()"
       placeholder="Nome da pasta"
       class="form-control mb-3"
     />
@@ -229,7 +230,9 @@
 <div class="modal-backdrop" *ngIf="modalRenomearAberto">
   <div class="modal-custom">
     <h3>Renomear</h3>
-    <input type="text" [(ngModel)]="novoNomeItem" class="form-control mb-3" />
+    <input type="text" [(ngModel)]="novoNomeItem"
+    (input)="novoNomeItem = (novoNomeItem || '').toUpperCase()"
+    class="form-control mb-3" />
     <div class="text-end">
       <button class="btn btn-primary me-2" (click)="renomearItem()">
         Salvar

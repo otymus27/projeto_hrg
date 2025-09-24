@@ -201,8 +201,30 @@ export class AuthService {
 
   // Limpa o token e todas as informações do usuário do localStorage e redireciona para o login
   logout(): void {
-    this.clearSession();
-    this.router.navigate(['/login']);
-    console.log('Logout realizado.');
+    const token = this.getToken();
+  
+    if (token) {
+      this.http.post(`${this.API_URL}/logout`, {}, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }).subscribe({
+        next: () => {
+          console.log('Logout registrado no backend');
+          this.clearSession();
+          this.router.navigate(['/login']);
+        },
+        error: (err) => {
+          console.error('Erro ao chamar logout no backend:', err);
+          // Mesmo se der erro, limpa localmente
+          this.clearSession();
+          this.router.navigate(['/login']);
+        }
+      });
+    } else {
+      // Caso não tenha token, só limpa local
+      this.clearSession();
+      this.router.navigate(['/login']);
+    }
   }
 }

@@ -58,7 +58,7 @@ export class AdminExplorerComponent implements OnInit {
   // ---------------- CRUD ----------------
   novoNomePasta = '';
   itemParaRenomear: PastaCompletaDTO | ArquivoAdmin | null = null;
-  novoNomeItem = '';
+  novoNomeItem:string = '';
   itemParaExcluir: PastaCompletaDTO | ArquivoAdmin | null = null;
 
   // ---------------- Upload ----------------

@@ -1,5 +1,5 @@
 // Ambiente de produção
 export const environment = {
   production: true,
-  apiUrl: '/api', // ✅ aponta para o proxy do Nginx
+  apiUrl: '/api', // ✅ o Nginx redireciona para o backend (api:8082)
 };
