@@ -15,11 +15,15 @@ import { AlterarSenhaComponent } from './components/alterar-senha/alterar-senha.
 import { ExplorerFormPublicComponent } from './features/public/pages/formularios/explorer-form-public.component';
 import { AdminFormularioComponent } from './features/admin/pages/admin-formulario/admin-formulario.component';
 import { FarmaciaExplorerPublicoComponent } from './features/public/pages/farmacia/farmacia.component';
+import { SobreComponent } from './components/layout-admin/sobre/sobre.component';
 
 export const routes: Routes = [
   // --- Rotas Públicas ---
   { path: '', redirectTo: 'home', pathMatch: 'full' },
   { path: 'home', component: HomeComponentPublico },
+
+  // 🔹 Página Sobre (público)
+  { path: 'sobre', component: SobreComponent },
 
   // Explorer de Protocolos Públicos
   { path: 'publico', component: ExplorerComponent },
@@ -115,6 +119,13 @@ export const routes: Routes = [
             data: { roles: ['ADMIN', 'GERENTE', 'BASIC'] }, // todos os logados podem alterar
           },
         ],
+      },
+
+       // 🔹 Página Sobre (admin)
+       {
+        path: 'sobre',
+        component: SobreComponent,
+        data: { roles: ['ADMIN', 'GERENTE', 'BASIC'] }, // todos os logados
       },
     ],
   },

@@ -65,7 +65,6 @@
       </ul>
     </li>
 
-    
     <!-- Usuários - apenas ADMIN -->
     <li class="nav-item" *ngIf="isAdmin()">
       <a class="nav-link" (click)="toggleSubmenu('usuarios')">
@@ -77,17 +76,6 @@
         ></i>
       </a>
       <ul class="submenu" *ngIf="showUsuariosSubmenu">
-        <li class="nav-item">
-          <a
-            class="nav-link"
-            routerLink="/admin/usuarios"
-            routerLinkActive="active"
-            [routerLinkActiveOptions]="{ exact: true }"
-          >
-            <i class="bi bi-list-ul"></i>
-            <span>Consulta</span>
-          </a>
-        </li>
         <li class="nav-item">
           <a
             class="nav-link"
@@ -135,6 +123,19 @@
       >
         <i class="bi bi-key"></i>
         <span>Alterar Senha</span>
+      </a>
+    </li>
+
+    <!-- Sobre - todos logados -->
+    <li class="nav-item" *ngIf="isLogado()">
+      <a
+        class="nav-link"
+        routerLink="/admin/sobre"
+        routerLinkActive="active"
+        (click)="hideAllSubmenus()"
+      >
+        <i class="bi bi-info-circle"></i>
+        <span>Sobre</span>
       </a>
     </li>
   </ul>

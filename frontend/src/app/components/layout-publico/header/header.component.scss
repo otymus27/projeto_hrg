@@ -1,21 +1,24 @@
 .main-header {
-  background-color: #007bff;
-  color: white;
-  padding: 1rem 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: #717f96; // azul institucional
+  color: #fff;
+  padding: 2rem 1rem; // aumenta a altura
+  text-align: center;
 
-  h1 {
-    margin: 0;
-    font-size: 1.8rem;
+  .logo-img {
+    height: 80px; // aumenta o logo
+    width: auto;
   }
 
-  a {
-    color: white;
-    text-decoration: none;
-    margin-left: 1rem;
-    font-size: 1rem;
+  h1 {
+    font-size: 2.2rem; // título maior
+    letter-spacing: 1px;
+  }
+
+  .subtitle {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 1.1rem;
+    font-weight: 400;
+    opacity: 0.9;
   }
 }
