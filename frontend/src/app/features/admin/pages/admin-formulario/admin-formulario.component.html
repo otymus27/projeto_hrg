@@ -5,7 +5,6 @@
       class="d-flex justify-content-between align-items-center bg-dark text-white p-3 rounded mb-3"
     >
       <h1>Gerenciador de Formulários</h1>
-      
     </div>
 
     <!-- Breadcrumb -->
@@ -88,10 +87,15 @@
                 "
               />
             </th>
-            <th (click)="ordenarPor('nomePasta')" style="cursor:pointer">Nome</th>
-            <th (click)="ordenarPor('tamanho')" style="cursor:pointer">Tamanho</th>
-            <th (click)="ordenarPor('dataUpload')" style="cursor:pointer">Data Upload</th>
-            
+            <th (click)="ordenarPor('nomePasta')" style="cursor: pointer">
+              Nome
+            </th>
+            <th (click)="ordenarPor('tamanho')" style="cursor: pointer">
+              Tamanho
+            </th>
+            <th (click)="ordenarPor('dataUpload')" style="cursor: pointer">
+              Data Upload
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -151,18 +155,22 @@
                 "
               >
                 <i class="bi bi-download"></i>
+                <span class="tooltip">Fazer download</span>
               </button>
               <button
                 class="btn btn-warning btn-sm me-1"
                 (click)="abrirModalRenomear(arquivo)"
               >
                 <i class="bi bi-pencil-square"></i>
+                <span class="tooltip">Renomear</span>
               </button>
               <button
                 class="btn btn-danger btn-sm"
                 (click)="abrirModalExcluir(arquivo)"
               >
                 <i class="bi bi-trash"></i>
+                <!-- Exibe uma mensagem em cima do botão -->
+                <span class="tooltip">Excluir</span>
               </button>
             </td>
           </tr>
@@ -230,9 +238,12 @@
 <div class="modal-backdrop" *ngIf="modalRenomearAberto">
   <div class="modal-custom">
     <h3>Renomear</h3>
-    <input type="text" [(ngModel)]="novoNomeItem"
-    (input)="novoNomeItem = (novoNomeItem || '').toUpperCase()"
-    class="form-control mb-3" />
+    <input
+      type="text"
+      [(ngModel)]="novoNomeItem"
+      (input)="novoNomeItem = (novoNomeItem || '').toUpperCase()"
+      class="form-control mb-3"
+    />
     <div class="text-end">
       <button class="btn btn-primary me-2" (click)="renomearItem()">
         Salvar

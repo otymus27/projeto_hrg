@@ -52,4 +52,6 @@ public interface PastaRepository extends JpaRepository<Pasta, Long> {
 
     // Para usar na pasta Formularios - aqui garantimos ordenação alfabética:
     List<Pasta> findAllByPastaPaiIsNullOrderByNomePastaAsc();
+
+    List<Pasta> findByPastaPai(Pasta pastaPai);
 }

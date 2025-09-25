@@ -169,30 +169,35 @@
                 (click)="abrirModalPermissao(pasta)"
               >
                 <i class="bi bi-person-check-fill"></i>
+                <span class="tooltip">Permissão</span>
               </button>
               <button
                 class="btn btn-warning btn-sm me-1"
                 (click)="abrirModalRenomear(pasta)"
               >
                 <i class="bi bi-pencil-square"></i>
+                <span class="tooltip">Renomear</span>
               </button>
               <button
                 class="btn btn-primary btn-sm me-1"
                 (click)="abrirModalMoverPasta(pasta)"
               >
                 <i class="bi bi-arrow-right-square"></i>
+                <span class="tooltip">Mover</span>
               </button>
               <button
                 class="btn btn-info btn-sm me-1"
                 (click)="abrirModalCopiarPasta(pasta)"
               >
                 <i class="bi bi-files"></i>
+                <span class="tooltip">Copiar</span>
               </button>
               <button
                 class="btn btn-danger btn-sm"
                 (click)="abrirModalExcluir(pasta)"
               >
                 <i class="bi bi-trash"></i>
+                <span class="tooltip">Excluir</span>
               </button>
             </td>
           </tr>
@@ -209,7 +214,7 @@
             <td (click)="abrirOpcoesArquivo(arquivo)" style="cursor: pointer">
               📄 {{ arquivo.nome }}
             </td>
-            <td>{{ arquivo.tamanho | number }} KB</td>
+            <td>{{ adminService.formatarTamanho(arquivo.tamanho) }}</td>
             <td>{{ arquivo.dataAtualizacao | date : "dd/MM/yyyy HH:mm" }}</td>
             <td>{{ arquivo.criadoPor }}</td>
 
@@ -219,30 +224,35 @@
                 (click)="downloadArquivo(arquivo)"
               >
                 <i class="bi bi-download"></i>
+                <span class="tooltip">Fazer download</span>
               </button>
               <button
                 class="btn btn-warning btn-sm me-1"
                 (click)="abrirModalRenomear(arquivo)"
               >
                 <i class="bi bi-pencil-square"></i>
+                <span class="tooltip">Renomear</span>
               </button>
               <button
                 class="btn btn-info btn-sm me-1"
                 (click)="abrirModalCopiar(arquivo)"
               >
                 <i class="bi bi-files"></i>
+                <span class="tooltip">Copiar</span>
               </button>
               <button
                 class="btn btn-info btn-sm me-1"
                 (click)="abrirModalMoverArquivo(arquivo)"
               >
                 <i class="bi bi-arrows-move"></i>
+                <span class="tooltip">Mover</span>
               </button>
               <button
                 class="btn btn-danger btn-sm"
                 (click)="abrirModalExcluir(arquivo)"
               >
                 <i class="bi bi-trash"></i>
+                <span class="tooltip">Excluir</span>
               </button>
             </td>
           </tr>
@@ -493,7 +503,7 @@
         *ngFor="let u of usuariosComPermissao"
         class="list-group-item d-flex justify-content-between"
       >
-        {{ u.username }}
+        {{ u.username }} - {{ u.nome }}
         <button
           class="btn btn-danger btn-sm"
           (click)="removerUsuarioPermissao(u)"

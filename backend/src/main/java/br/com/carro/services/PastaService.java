@@ -944,10 +944,13 @@ public Pasta renomearPasta(Long pastaId, String novoNome, Usuario usuarioLogado)
         boolean isAdmin = usuarioLogado.getRoles().stream()
                 .anyMatch(r -> r.getNome().equalsIgnoreCase("ADMIN"));
 
+        boolean isGerente = usuarioLogado.getRoles().stream()
+                .anyMatch(r -> r.getNome().equalsIgnoreCase("GERENTE"));
+
         boolean isCriador = pasta.getCriadoPor() != null &&
                 pasta.getCriadoPor().getId().equals(usuarioLogado.getId());
 
-        if (!isAdmin && !isCriador) {
+        if (!isAdmin && !isCriador && !isGerente) {
             throw new AccessDeniedException("Somente o ADMIN ou o criador da pasta pode alterar permissões.");
         }
 
@@ -985,6 +988,25 @@ public Pasta renomearPasta(Long pastaId, String novoNome, Usuario usuarioLogado)
 
         pasta.setDataAtualizacao(LocalDateTime.now());
         pastaRepository.save(pasta);
+
+        // 🔑 Propagar alterações para as subpastas
+        propagarPermissoesParaFilhas(pasta, pasta.getUsuariosComPermissao());
+    }
+
+    /**
+     * Atualiza recursivamente as permissões das subpastas
+     */
+    private void propagarPermissoesParaFilhas(Pasta pastaPai, Set<Usuario> usuariosComPermissao) {
+        List<Pasta> subPastas = pastaRepository.findByPastaPai(pastaPai);
+
+        for (Pasta sub : subPastas) {
+            sub.setUsuariosComPermissao(new HashSet<>(usuariosComPermissao));
+            sub.setDataAtualizacao(LocalDateTime.now());
+            pastaRepository.save(sub);
+
+            // chamada recursiva para netas, bisnetas, etc
+            propagarPermissoesParaFilhas(sub, usuariosComPermissao);
+        }
     }
 
 

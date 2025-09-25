@@ -58,7 +58,7 @@ export class AdminExplorerComponent implements OnInit {
   // ---------------- CRUD ----------------
   novoNomePasta = '';
   itemParaRenomear: PastaCompletaDTO | ArquivoAdmin | null = null;
-  novoNomeItem:string = '';
+  novoNomeItem: string = '';
   itemParaExcluir: PastaCompletaDTO | ArquivoAdmin | null = null;
 
   // ---------------- Upload ----------------
@@ -95,7 +95,8 @@ export class AdminExplorerComponent implements OnInit {
   arquivoSelecionado: ArquivoAdmin | null = null;
 
   constructor(
-    private adminService: AdminService,
+    public adminService: AdminService, // 🔑 precisa ser público pro HTML usar formatarTamanho
+    //private adminService: AdminService,
     public toastService: ToastService
   ) {}
 
@@ -551,16 +552,6 @@ export class AdminExplorerComponent implements OnInit {
     });
   }
 
-  // abrirModalMoverArquivo(arquivo: ArquivoAdmin): void {
-  //   this.arquivoParaMover = arquivo;
-  //   this.modalMoverArquivoAberto = true;
-  //   this.pastaDestinoArquivo = null;
-
-  //   this.adminService.listarConteudoRaiz().subscribe({
-  //     next: (pastas) => (this.pastasDisponiveisParaMover = pastas),
-  //   });
-  // }
-
   abrirModalMoverArquivo(arquivo: ArquivoAdmin): void {
     this.arquivoParaMover = arquivo;
     this.modalMoverArquivoAberto = true;
@@ -635,6 +626,7 @@ export class AdminExplorerComponent implements OnInit {
       const url = window.URL.createObjectURL(blob);
       window.open(url, '_blank');
     });
+    this.fecharModalOpcoesArquivo();
   }
   downloadArquivo(arquivo: ArquivoAdmin | null) {
     if (!arquivo) return;

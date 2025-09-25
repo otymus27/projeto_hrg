@@ -135,6 +135,8 @@ export class AdminFormularioComponent implements OnInit {
       },
       error: (err) => this.handleError('Erro ao visualizar arquivo', err),
     });
+
+    this.fecharModalOpcoesArquivo();
   }
 
   abrirPasta(pasta: PastaExplorerDTO, adicionarBreadcrumb = true): void {

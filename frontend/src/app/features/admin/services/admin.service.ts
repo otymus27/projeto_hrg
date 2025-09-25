@@ -326,7 +326,7 @@ export class AdminService {
   // ---------------- Erro centralizado ----------------
   private tratarErro(error: HttpErrorResponse) {
     console.error('Erro capturado no AdminService:', error);
-  
+
     // ✅ Caso especial para uploads muito grandes
     if (error.status === 413) {
       const erroBackend: ErrorMessage = {
@@ -338,7 +338,7 @@ export class AdminService {
       };
       return throwError(() => erroBackend);
     }
-  
+
     // 🔹 Demais casos (fallback)
     const erroBackend: ErrorMessage = {
       status: error.status,
@@ -347,8 +347,18 @@ export class AdminService {
       path: error.error?.path || error.url || '',
       timestamp: error.error?.timestamp || new Date().toISOString(),
     };
-  
+
     return throwError(() => erroBackend);
   }
-  
+
+  // ===============================
+  // 📐 Utilitário para exibir tamanho legível
+  // ===============================
+  formatarTamanho(bytes: number): string {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
 }
